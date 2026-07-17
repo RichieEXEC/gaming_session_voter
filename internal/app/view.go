@@ -54,6 +54,7 @@ type DateRow struct {
 type GameRow struct {
 	OptionID                 int64
 	Name, Genre, Meta, Cover string
+	IgdbURL                  string // odkaz na stránku hry, prázdné u ručně přidaných
 	Hue                      int    // barva náhradního obalu, když IGDB obal chybí
 	Initials                 string
 	Year, MaxPlayers         int
@@ -132,6 +133,7 @@ func buildSessionView(sess *store.Session, pr i18n.Printer, mine *store.Vote) Se
 			MaxKnown:   g.MaxPlayers > 0,
 			HasVotes:   score > 0, // score > 0 <=> aspoň jedno ano/možná
 			Cover:      g.Cover,
+			IgdbURL:    igdbGameURL(g.Slug),
 			Hue:        gameHue(g.Name),
 			Initials:   gameInitials(g.Name),
 			Meta:       gameMeta(pr, g),
@@ -262,6 +264,27 @@ func gameMeta(pr i18n.Printer, g store.GameOption) string {
 		bits = append(bits, pr.T("meta.playersUnknown"))
 	}
 	return strings.Join(bits, " · ")
+}
+
+// igdbGameURL složí odkaz na stránku hry z jejího slugu. Slug bereme s
+// rezervou (posílá ho prohlížeč), tak pustíme jen [a-z0-9-]; jinak nic.
+func igdbGameURL(slug string) string {
+	if !validSlug(slug) {
+		return ""
+	}
+	return "https://www.igdb.com/games/" + slug
+}
+
+func validSlug(s string) bool {
+	if s == "" || len(s) > 120 {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
+			return false
+		}
+	}
+	return true
 }
 
 func formatTimes(start, end string) string {

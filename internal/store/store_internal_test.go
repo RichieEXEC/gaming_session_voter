@@ -74,6 +74,73 @@ func TestMigrationPreservesExistingData(t *testing.T) {
 	}
 }
 
+// Nasazená produkce je na verzi 2 (sezení + hry, bez slugu). Tenhle test
+// přesně ten stav postaví a ověří, že přechod na v3 (přidání slugu) proběhne
+// a data her přežijí. Kritické, protože se to spustí na ostrých datech.
+func TestMigrationV2ToV3PreservesGames(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v2.db")
+	func() {
+		db, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)")
+		if err != nil {
+			t.Fatalf("open raw: %v", err)
+		}
+		defer db.Close()
+		// migrations[0] a [1] = stav v2
+		if _, err := db.Exec(migrations[0]); err != nil {
+			t.Fatalf("m0: %v", err)
+		}
+		if _, err := db.Exec(migrations[1]); err != nil {
+			t.Fatalf("m1: %v", err)
+		}
+		if _, err := db.Exec(`PRAGMA user_version = 2`); err != nil {
+			t.Fatalf("set v2: %v", err)
+		}
+		// sezení s hrou ve schématu v2 (sloupec slug ještě neexistuje)
+		if _, err := db.Exec(`
+			INSERT INTO sessions (id, slug, title, note, created_at)
+			VALUES (1, 'sess', 'Večer', '', '2026-07-10T10:00:00Z');
+			INSERT INTO options (id, session_id, kind, day, name, year, genre, max_players, cover, position)
+			VALUES (30, 1, 'game', '', 'Helldivers 2', 2024, 'Shooter', 4, 'co6', 0);
+		`); err != nil {
+			t.Fatalf("seed v2 game: %v", err)
+		}
+	}()
+
+	st, err := Open(path) // spustí migraci v2 -> v3
+	if err != nil {
+		t.Fatalf("open (migrate v2->v3): %v", err)
+	}
+	defer st.Close()
+
+	sess, err := st.GetSession("sess")
+	if err != nil {
+		t.Fatalf("get session: %v", err)
+	}
+	if len(sess.Games) != 1 || sess.Games[0].Name != "Helldivers 2" || sess.Games[0].MaxPlayers != 4 {
+		t.Fatalf("hra se migrací ztratila nebo změnila: %+v", sess.Games)
+	}
+	if sess.Games[0].Slug != "" {
+		t.Errorf("stará hra má mít prázdný slug, má %q", sess.Games[0].Slug)
+	}
+	// a nová hra se slugem se přidat dá
+	if _, err := st.AddGame(sess.ID, NewGame{IGDBID: 9, Name: "Valheim", Slug: "valheim"}); err != nil {
+		t.Fatalf("add game with slug: %v", err)
+	}
+	sess = sess2(t, st, "sess")
+	if sess.Games[1].Slug != "valheim" {
+		t.Errorf("nová hra: slug = %q", sess.Games[1].Slug)
+	}
+}
+
+func sess2(t *testing.T, st *Store, slug string) *Session {
+	t.Helper()
+	s, err := st.GetSession(slug)
+	if err != nil {
+		t.Fatalf("get session: %v", err)
+	}
+	return s
+}
+
 func TestMigrationIsIdempotent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "twice.db")
 	seedOldDB(t, path)

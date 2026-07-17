@@ -84,6 +84,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /p/{slug}/games/search", s.handleGameSearch)
 	s.mux.HandleFunc("POST /p/{slug}/games", s.handleAddGame)
 	s.mux.HandleFunc("POST /p/{slug}/games/{id}/delete", s.handleRemoveGame)
+	s.mux.HandleFunc("POST /p/{slug}/games/{id}/max", s.handleSetMax)
 	s.mux.HandleFunc("GET /lang/{code}", s.handleLang)
 }
 

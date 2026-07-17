@@ -26,9 +26,11 @@ zero.
 
 Games come from [IGDB](https://www.igdb.com/): anyone on the session can search
 and add one. What's stored is a snapshot (name, year, genre, max players,
-cover) taken when the game is added, so the board renders with no external
-calls and keeps working even if IGDB is down. Removing a game that already has
-votes asks for confirmation first.
+cover, slug) taken when the game is added, so the board renders with no
+external calls and keeps working even if IGDB is down. Each game links to its
+IGDB page for trailers and details. When IGDB doesn't know a game's player
+count, anyone can set it by hand — whoever adds the game usually knows the
+limit. Removing a game that already has votes asks for confirmation first.
 
 ## Running it
 
@@ -157,9 +159,10 @@ never anything worse, because all output is escaped.
 **Schema migrations.** The database version lives in `PRAGMA user_version`;
 `internal/store/migrations.go` applies steps in order, each in its own
 transaction. The original date-only schema is migration 1; migration 2 renames
-`polls` to `sessions` and adds the game columns, so an existing deployment's
-polls become sessions with an empty game board on first start after deploy.
-A released migration is never edited; changes go in a new step.
+`polls` to `sessions` and adds the game columns (so an existing deployment's
+polls become sessions with an empty game board on first start after deploy);
+migration 3 adds the game slug. A released migration is never edited; changes
+go in a new step.
 
 ## Layout
 

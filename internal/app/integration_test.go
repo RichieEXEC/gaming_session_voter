@@ -24,7 +24,7 @@ func igdbStub(t *testing.T) *httptest.Server {
 		io.WriteString(w, `{"access_token":"tok","expires_in":5000000}`)
 	})
 	mux.HandleFunc("/v4/games", func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, `[{"id":17,"name":"Helldivers 2","first_release_date":1707350400,
+		io.WriteString(w, `[{"id":17,"name":"Helldivers 2","slug":"helldivers-2","first_release_date":1707350400,
 			"genres":[{"name":"Shooter"}],"multiplayer_modes":[{"onlinecoopmax":4}],
 			"cover":{"image_id":"co6"}}]`)
 	})
@@ -118,12 +118,15 @@ func TestFullSessionFlow(t *testing.T) {
 	// 3. přidání hry
 	post(t, c, ts.URL, "/p/"+slug+"/games", url.Values{
 		"igdb_id": {"17"}, "name": {"Helldivers 2"}, "year": {"2024"},
-		"genre": {"Shooter"}, "max": {"4"}, "cover": {"co6"},
+		"genre": {"Shooter"}, "max": {"4"}, "cover": {"co6"}, "slug": {"helldivers-2"},
 	}).Body.Close()
 
 	page = body(t, mustGet(t, c, ts.URL+"/p/"+slug))
 	if !strings.Contains(page, "Helldivers 2") {
 		t.Fatal("přidaná hra není na stránce")
+	}
+	if !strings.Contains(page, `href="https://www.igdb.com/games/helldivers-2"`) {
+		t.Fatal("odkaz na IGDB stránku hry chybí")
 	}
 
 	// duplicitní přidání téže hry musí selhat (flash), ne přidat druhou
@@ -164,8 +167,16 @@ func TestFullSessionFlow(t *testing.T) {
 		t.Fatal("smazání hry s hlasem není označené data-confirm")
 	}
 
-	// 5. odebrání hry
 	idGame := ids[1][1]
+
+	// 5. ruční nastavení počtu hráčů
+	post(t, c, ts.URL, "/p/"+slug+"/games/"+idGame+"/max", url.Values{"max": {"7"}}).Body.Close()
+	page = body(t, mustGet(t, c, ts.URL+"/p/"+slug))
+	if !strings.Contains(page, "až 7 hráčů") {
+		t.Fatal("ruční počet hráčů se neuložil do metadat")
+	}
+
+	// 6. odebrání hry
 	post(t, c, ts.URL, "/p/"+slug+"/games/"+idGame+"/delete", url.Values{}).Body.Close()
 	page = body(t, mustGet(t, c, ts.URL+"/p/"+slug))
 	if strings.Contains(page, "Helldivers 2") {

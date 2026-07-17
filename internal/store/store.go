@@ -62,6 +62,7 @@ type GameOption struct {
 	Genre      string
 	MaxPlayers int
 	Cover      string // IGDB image_id, prázdné = bez obalu
+	Slug       string // IGDB slug pro odkaz na stránku hry, prázdné = ručně přidané
 }
 
 // Vote je hlas jednoho člověka. Choices mapuje ID možnosti (termínu i hry)
@@ -100,6 +101,7 @@ type NewGame struct {
 	Genre      string
 	MaxPlayers int
 	Cover      string
+	Slug       string
 }
 
 func Open(path string) (*Store, error) {
@@ -228,9 +230,9 @@ func (s *Store) AddGame(sessionID int64, g NewGame) (int64, error) {
 	}
 
 	res, err := tx.Exec(
-		`INSERT INTO options (session_id, kind, igdb_id, name, year, genre, max_players, cover, position, day)
-		 VALUES (?, 'game', ?, ?, ?, ?, ?, ?, ?, '')`,
-		sessionID, g.IGDBID, g.Name, g.Year, g.Genre, g.MaxPlayers, g.Cover, pos,
+		`INSERT INTO options (session_id, kind, igdb_id, name, year, genre, max_players, cover, slug, position, day)
+		 VALUES (?, 'game', ?, ?, ?, ?, ?, ?, ?, ?, '')`,
+		sessionID, g.IGDBID, g.Name, g.Year, g.Genre, g.MaxPlayers, g.Cover, g.Slug, pos,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -246,6 +248,26 @@ func (s *Store) AddGame(sessionID int64, g NewGame) (int64, error) {
 		return 0, err
 	}
 	return id, nil
+}
+
+// UpdateGameMax ručně nastaví (nebo vynuluje) počet hráčů u hry. Používá se
+// tam, kde ho IGDB neznalo a ví ho ten, kdo hru přidal.
+func (s *Store) UpdateGameMax(sessionID, optionID int64, max int) error {
+	res, err := s.db.Exec(
+		`UPDATE options SET max_players = ? WHERE id = ? AND session_id = ? AND kind = 'game'`,
+		max, optionID, sessionID,
+	)
+	if err != nil {
+		return fmt.Errorf("update game max: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // RemoveGame odebere hru ze sezení i s hlasy pro ni (přes ON DELETE CASCADE
@@ -293,7 +315,7 @@ func (s *Store) GetSession(slug string) (*Session, error) {
 
 func (s *Store) loadOptions(sess *Session) error {
 	rows, err := s.db.Query(
-		`SELECT id, kind, day, start_at, end_at, igdb_id, name, year, genre, max_players, cover
+		`SELECT id, kind, day, start_at, end_at, igdb_id, name, year, genre, max_players, cover, slug
 		   FROM options
 		  WHERE session_id = ?
 		  ORDER BY kind DESC, position, day`, // 'date' > 'game' abecedně, termíny se řadí přes ORDER BY day níž
@@ -309,16 +331,16 @@ func (s *Store) loadOptions(sess *Session) error {
 			id                        int64
 			kind, day, start, end     string
 			igdbID                    sql.NullInt64
-			name, genre, cover        string
+			name, genre, cover, slug  string
 			year, maxPlayers          int
 		)
-		if err := rows.Scan(&id, &kind, &day, &start, &end, &igdbID, &name, &year, &genre, &maxPlayers, &cover); err != nil {
+		if err := rows.Scan(&id, &kind, &day, &start, &end, &igdbID, &name, &year, &genre, &maxPlayers, &cover, &slug); err != nil {
 			return err
 		}
 		if kind == "game" {
 			sess.Games = append(sess.Games, GameOption{
 				ID: id, IGDBID: igdbID.Int64, Name: name, Year: year,
-				Genre: genre, MaxPlayers: maxPlayers, Cover: cover,
+				Genre: genre, MaxPlayers: maxPlayers, Cover: cover, Slug: slug,
 			})
 		} else {
 			sess.Dates = append(sess.Dates, DateOption{ID: id, Day: day, StartAt: start, EndAt: end})

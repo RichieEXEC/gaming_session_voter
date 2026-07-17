@@ -12,6 +12,8 @@
     no: '<svg class="glyph" viewBox="0 0 12 12" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3.5 6h5"/></svg>'
   };
 
+  var EXT_ICON = '<svg class="ext" width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5H2.5v7h7v-2"/><path d="M7 2.5h2.5V5"/><path d="M9.5 2.5 5.5 6.5"/></svg>';
+
   var toastEl = document.getElementById("toast");
   var toastTimer;
   function toast(msg) {
@@ -164,7 +166,17 @@
         body.className = "res-body";
         var name = document.createElement("span");
         name.className = "res-name";
-        name.textContent = g.name;
+        if (g.igdbUrl) {
+          var link = document.createElement("a");
+          link.href = g.igdbUrl;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = g.name;
+          link.insertAdjacentHTML("beforeend", EXT_ICON);
+          name.appendChild(link);
+        } else {
+          name.textContent = g.name;
+        }
         var meta = document.createElement("span");
         meta.className = "res-meta";
         meta.textContent = g.meta;
@@ -188,6 +200,7 @@
           addHidden(f, "genre", g.genre);
           addHidden(f, "max", g.max);
           addHidden(f, "cover", g.cover);
+          addHidden(f, "slug", g.slug);
           var btn = document.createElement("button");
           btn.type = "submit";
           btn.className = "res-add";
@@ -266,6 +279,35 @@
     });
     confirmDlg.addEventListener("close", function () { pendingForm = null; });
   }
+
+  /* ---------- ruční počet hráčů ---------- */
+
+  document.addEventListener("click", function (e) {
+    var edit = e.target.closest("[data-max-edit]");
+    if (edit) {
+      var wrap = edit.closest(".max-wrap");
+      edit.hidden = true;
+      var form = wrap.querySelector(".max-form");
+      form.hidden = false;
+      var inp = form.querySelector(".max-in");
+      if (inp) { inp.focus(); inp.select(); }
+      return;
+    }
+    var cancel = e.target.closest("[data-max-cancel]");
+    if (cancel) {
+      var w = cancel.closest(".max-wrap");
+      w.querySelector(".max-form").hidden = true;
+      w.querySelector(".max-edit").hidden = false;
+    }
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && e.target.classList && e.target.classList.contains("max-in")) {
+      var w = e.target.closest(".max-wrap");
+      w.querySelector(".max-form").hidden = true;
+      w.querySelector(".max-edit").hidden = false;
+    }
+  });
 
   /* ---------- zakládání (stránka nového sezení) ---------- */
 

@@ -74,6 +74,12 @@ var catalogs = map[Lang]map[string]string{
 		"game.cap":             "max",
 		"game.tightTitle":      "Hra je pro %d, zatím vás dorazí %d.",
 		"game.removeLabel":     "Odebrat hru",
+		"game.openIgdb":        "Otevřít na IGDB",
+		"game.setPlayers":      "+ počet hráčů",
+		"game.editPlayers":     "Upravit počet hráčů",
+		"game.playersHint":     "kolik hráčů",
+		"game.savePlayers":     "Uložit",
+		"game.cancelEdit":      "Zrušit",
 
 		"confirm.title":   "Smazat hru?",
 		"confirm.body":    "U hry %s už někdo hlasoval. Smazáním přijdeš i o tyhle hlasy.",
@@ -134,6 +140,7 @@ var catalogs = map[Lang]map[string]string{
 		"ok.saved":        "Uloženo, díky!",
 		"ok.gameAdded":    "Hra přidána.",
 		"ok.gameRemoved":  "Hra odebrána.",
+		"ok.maxSet":       "Počet hráčů uložen.",
 		"ok.home":         "Zpět na začátek",
 	},
 
@@ -202,6 +209,12 @@ var catalogs = map[Lang]map[string]string{
 		"game.cap":            "max",
 		"game.tightTitle":     "Game fits %d, %d coming so far.",
 		"game.removeLabel":    "Remove game",
+		"game.openIgdb":       "Open on IGDB",
+		"game.setPlayers":     "+ player count",
+		"game.editPlayers":    "Edit player count",
+		"game.playersHint":    "how many players",
+		"game.savePlayers":    "Save",
+		"game.cancelEdit":     "Cancel",
 
 		"confirm.title":  "Delete game?",
 		"confirm.body":   "People have already voted on %s. Deleting it removes those votes too.",
@@ -262,6 +275,7 @@ var catalogs = map[Lang]map[string]string{
 		"ok.saved":       "Saved, thanks!",
 		"ok.gameAdded":   "Game added.",
 		"ok.gameRemoved": "Game removed.",
+		"ok.maxSet":      "Player count saved.",
 		"ok.home":        "Back to start",
 	},
 }

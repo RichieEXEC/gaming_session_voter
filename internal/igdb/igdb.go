@@ -26,6 +26,7 @@ type Game struct {
 	Genre      string `json:"genre"`
 	MaxPlayers int    `json:"max"`
 	Cover      string `json:"cover"` // IGDB image_id
+	Slug       string `json:"slug"`  // pro odkaz na igdb.com/games/<slug>
 }
 
 // Client mluví s IGDB. Bez client id a secret je vypnutý: hledání pak vrací
@@ -103,7 +104,7 @@ func (c *Client) Search(ctx context.Context, query string) ([]Game, error) {
 	// Pozor: dřív to bylo pole "category", které IGDB opustilo a nechalo
 	// prázdné, takže "where category = 0" najednou nevracelo vůbec nic.
 	body := fmt.Sprintf(
-		`search "%s"; fields name, first_release_date, genres.name, `+
+		`search "%s"; fields name, slug, first_release_date, genres.name, `+
 			`multiplayer_modes.onlinemax, multiplayer_modes.onlinecoopmax, `+
 			`multiplayer_modes.offlinemax, cover.image_id; `+
 			`where game_type = 0; limit 8;`, q)
@@ -226,6 +227,7 @@ func sanitize(q string) string {
 type rawGame struct {
 	ID               int64  `json:"id"`
 	Name             string `json:"name"`
+	Slug             string `json:"slug"`
 	FirstReleaseDate int64  `json:"first_release_date"`
 	Genres           []struct {
 		Name string `json:"name"`
@@ -241,7 +243,7 @@ type rawGame struct {
 }
 
 func (r rawGame) toGame() Game {
-	g := Game{IGDBID: r.ID, Name: r.Name, Cover: r.Cover.ImageID}
+	g := Game{IGDBID: r.ID, Name: r.Name, Slug: r.Slug, Cover: r.Cover.ImageID}
 	if r.FirstReleaseDate > 0 {
 		g.Year = time.Unix(r.FirstReleaseDate, 0).UTC().Year()
 	}

@@ -36,6 +36,9 @@ var migrations = []string{
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_options_game
 	    ON options(session_id, igdb_id) WHERE kind = 'game';
 	`,
+
+	// v2 -> v3: slug hry z IGDB, aby šlo odkázat na její stránku.
+	`ALTER TABLE options ADD COLUMN slug TEXT NOT NULL DEFAULT '';`,
 }
 
 // migrate dožene databázi na poslední verzi. Každý krok běží ve vlastní

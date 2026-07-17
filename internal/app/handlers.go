@@ -320,14 +320,16 @@ func (s *Server) handleGameSearch(w http.ResponseWriter, r *http.Request) {
 	resp := searchResp{Games: make([]searchGame, 0, len(found))}
 	for _, g := range found {
 		resp.Games = append(resp.Games, searchGame{
-			IGDBID: g.IGDBID,
-			Name:   g.Name,
-			Year:   g.Year,
-			Genre:  g.Genre,
-			Max:    g.MaxPlayers,
-			Cover:  g.Cover,
-			Meta:   gameMeta(pr, store.GameOption{Year: g.Year, Genre: g.Genre, MaxPlayers: g.MaxPlayers}),
-			In:     inSession[g.IGDBID],
+			IGDBID:  g.IGDBID,
+			Name:    g.Name,
+			Year:    g.Year,
+			Genre:   g.Genre,
+			Max:     g.MaxPlayers,
+			Cover:   g.Cover,
+			Slug:    g.Slug,
+			IgdbURL: igdbGameURL(g.Slug),
+			Meta:    gameMeta(pr, store.GameOption{Year: g.Year, Genre: g.Genre, MaxPlayers: g.MaxPlayers}),
+			In:      inSession[g.IGDBID],
 		})
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -414,6 +416,49 @@ func (s *Server) handleRemoveGame(w http.ResponseWriter, r *http.Request) {
 	s.redirectFlash(w, r, slug, "gameremoved", "co")
 }
 
+// handleSetMax ručně nastaví počet hráčů u hry, kterou IGDB nezná. Prázdné
+// nebo neplatné číslo znamená "zpět na neznámé" (0).
+func (s *Server) handleSetMax(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	if !sameOrigin(r) {
+		s.fail(w, r, http.StatusForbidden, "err.badRequest", "err.serverLead")
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		s.fail(w, r, http.StatusBadRequest, "err.badRequest", "err.serverLead")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "err.badRequest", "err.serverLead")
+		return
+	}
+
+	sess, err := s.st.GetSession(slug)
+	if errors.Is(err, store.ErrNotFound) {
+		s.fail(w, r, http.StatusNotFound, "err.notFound", "err.notFoundLead")
+		return
+	}
+	if err != nil {
+		s.log.Error("get session", "err", err, "slug", slug)
+		s.fail(w, r, http.StatusInternalServerError, "err.server", "err.serverLead")
+		return
+	}
+
+	max := 0 // mimo rozsah = neznámé
+	if n, err := strconv.Atoi(strings.TrimSpace(r.FormValue("max"))); err == nil && n >= 1 && n <= 1000 {
+		max = n
+	}
+
+	if err := s.st.UpdateGameMax(sess.ID, id, max); err != nil && !errors.Is(err, store.ErrNotFound) {
+		s.log.Error("set game max", "err", err, "slug", slug)
+		s.fail(w, r, http.StatusInternalServerError, "err.server", "err.serverLead")
+		return
+	}
+	s.redirectFlash(w, r, slug, "maxset", "co")
+}
+
 // parseGameForm vytáhne a ořeže snímek hry z formuláře. Metadata posílá
 // prohlížeč (z našeho hledání), tak je bereme s rezervou: ořízneme délky
 // a rozsahy. V nejhorším bude u hry křivý rok, ne díra do aplikace.
@@ -434,6 +479,7 @@ func parseGameForm(r *http.Request) (store.NewGame, bool) {
 		Name:   name,
 		Genre:  clampRunes(strings.TrimSpace(r.FormValue("genre")), 40),
 		Cover:  cleanCover(r.FormValue("cover")),
+		Slug:   cleanSlug(r.FormValue("slug")),
 	}
 	if y, err := strconv.Atoi(r.FormValue("year")); err == nil && y > 1950 && y < 2100 {
 		g.Year = y
@@ -442,6 +488,15 @@ func parseGameForm(r *http.Request) (store.NewGame, bool) {
 		g.MaxPlayers = m
 	}
 	return g, true
+}
+
+// cleanSlug pustí jen platný IGDB slug, jinak prázdno.
+func cleanSlug(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if validSlug(s) {
+		return s
+	}
+	return ""
 }
 
 // cleanCover pustí jen tvar IGDB image_id (písmena, číslice, podtržítko).
@@ -474,14 +529,16 @@ type searchResp struct {
 }
 
 type searchGame struct {
-	IGDBID int64  `json:"igdbId"`
-	Name   string `json:"name"`
-	Year   int    `json:"year"`
-	Genre  string `json:"genre"`
-	Max    int    `json:"max"`
-	Cover  string `json:"cover"`
-	Meta   string `json:"meta"`
-	In     bool   `json:"in"`
+	IGDBID  int64  `json:"igdbId"`
+	Name    string `json:"name"`
+	Year    int    `json:"year"`
+	Genre   string `json:"genre"`
+	Max     int    `json:"max"`
+	Cover   string `json:"cover"`
+	Slug    string `json:"slug"`
+	IgdbURL string `json:"igdbUrl"`
+	Meta    string `json:"meta"`
+	In      bool   `json:"in"`
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -516,6 +573,8 @@ func flashText(pr i18n.Printer, code string) string {
 		return pr.T("ok.gameAdded")
 	case "gameremoved":
 		return pr.T("ok.gameRemoved")
+	case "maxset":
+		return pr.T("ok.maxSet")
 	case "gameexists":
 		return pr.T("err.gameExists")
 	case "gameinvalid":

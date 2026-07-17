@@ -154,8 +154,12 @@ button { font: inherit; cursor: pointer; }
 .results { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--line-soft); padding-top: 8px; max-height: 300px; overflow-y: auto; }
 .res { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 8px; border: 0; background: transparent; text-align: left; width: 100%; color: var(--text); }
 .res:hover, .res:focus-within { background: var(--raised); }
-.res-body { flex: 1; min-width: 0; }
+.res-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .res-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.res-name a { color: inherit; text-decoration: none; }
+.res-name a:hover { color: var(--amber-text); text-decoration: underline; text-underline-offset: 2px; }
+.res-name .ext { margin-left: 4px; opacity: .5; vertical-align: -1px; }
+.res-name a:hover .ext { opacity: .9; }
 .res-meta { font-family: var(--mono); font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .res-add { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); border: 1px solid var(--line); background: transparent; border-radius: 6px; padding: 4px 9px; flex: none; }
 .res-form { flex: none; }
@@ -181,6 +185,23 @@ button { font: inherit; cursor: pointer; }
 .rail.is-best { background: var(--amber-wash); box-shadow: inset 3px 0 0 var(--amber); }
 .g-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
 .g-name { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-link { color: inherit; text-decoration: none; }
+.g-link:hover { color: var(--amber-text); text-decoration: underline; text-underline-offset: 2px; }
+.g-link .ext { margin-left: 3px; opacity: .45; vertical-align: -1px; }
+.g-link:hover .ext { opacity: .9; }
+
+/* ruční počet hráčů */
+.max-wrap { display: flex; align-items: center; min-height: 15px; }
+.max-edit { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--faint); background: none; border: 0; padding: 0; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.max-edit:hover { color: var(--amber-text); }
+.max-edit.unset { color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+.max-edit:not(.unset) { opacity: 0; transition: opacity .12s ease; }
+.rail:hover .max-edit:not(.unset), .max-edit:not(.unset):focus-visible { opacity: 1; }
+.max-form { display: flex; align-items: center; gap: 4px; }
+.max-in { width: 58px; font-family: var(--mono); font-size: 12px; padding: 2px 6px; background: var(--raised); border: 1px solid var(--line); border-radius: 6px; color: var(--text); }
+.max-in:focus { outline: 2px solid var(--amber); outline-offset: 0; border-color: transparent; }
+.max-btn { border: 1px solid var(--line); background: transparent; color: var(--dim); border-radius: 6px; width: 22px; height: 22px; display: grid; place-items: center; cursor: pointer; flex: none; }
+.max-btn:hover { color: var(--text); border-color: var(--amber-edge); }
 .g-meta { font-family: var(--mono); font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .d-date { font-family: var(--mono); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 7px; }
 .d-dow { color: var(--amber-text); font-size: 11px; letter-spacing: .1em; }
@@ -274,7 +295,7 @@ button { font: inherit; cursor: pointer; }
   .wrap { padding: 20px 14px 140px; }
   .summary { grid-template-columns: 1fr; }
   .sum-count { font-size: 20px; }
-  .g-meta { display: none; }
+  .g-meta, .max-wrap { display: none; }
   .hd { align-items: flex-end; padding: 0 0 10px; }
   .hd-rail { align-items: flex-end; padding: 0 14px 12px; }
   .pname { writing-mode: vertical-rl; transform: rotate(180deg); max-width: none; max-height: 84px; }

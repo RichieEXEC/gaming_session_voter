@@ -48,11 +48,11 @@ func (s *stubIGDB) client() *Client {
 }
 
 const sampleGames = `[
-  {"id":1,"name":"Helldivers 2","first_release_date":1707350400,
+  {"id":1,"name":"Helldivers 2","slug":"helldivers-2","first_release_date":1707350400,
    "genres":[{"name":"Shooter"}],
    "multiplayer_modes":[{"onlinecoopmax":4,"onlinemax":0}],
    "cover":{"image_id":"co6"}},
-  {"id":2,"name":"Factorio","first_release_date":1598313600,
+  {"id":2,"name":"Factorio","slug":"factorio","first_release_date":1598313600,
    "genres":[{"name":"Strategy"}],
    "multiplayer_modes":[],
    "cover":{"image_id":"co7"}}
@@ -85,6 +85,9 @@ func TestSearchParsesGames(t *testing.T) {
 	}
 	if hd.Cover != "co6" {
 		t.Errorf("cover = %q", hd.Cover)
+	}
+	if hd.Slug != "helldivers-2" {
+		t.Errorf("slug = %q, chci helldivers-2", hd.Slug)
 	}
 
 	// Factorio: prázdné multiplayer_modes -> nevíme (0).

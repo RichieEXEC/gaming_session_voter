@@ -184,6 +184,39 @@ func TestGameMeta(t *testing.T) {
 	}
 }
 
+func TestIgdbGameURL(t *testing.T) {
+	cases := map[string]string{
+		"helldivers-2":     "https://www.igdb.com/games/helldivers-2",
+		"meccha-chameleon": "https://www.igdb.com/games/meccha-chameleon",
+		"":                 "",              // ručně přidaná hra bez slugu
+		"Helldivers 2":     "",              // mezera a velká písmena = neplatné
+		"a/../../etc":      "",              // pokus o únik
+		"game?x=1":         "",              // dotazovací parametry pryč
+	}
+	for slug, want := range cases {
+		if got := igdbGameURL(slug); got != want {
+			t.Errorf("igdbGameURL(%q) = %q, chci %q", slug, got, want)
+		}
+	}
+}
+
+func TestGameRowCarriesURL(t *testing.T) {
+	sess := &store.Session{
+		ID: 1, Slug: "x", Title: "T",
+		Games: []store.GameOption{
+			{ID: 20, Name: "Helldivers 2", Slug: "helldivers-2"},
+			{ID: 21, Name: "Ručně přidaná", Slug: ""},
+		},
+	}
+	v := buildSessionView(sess, cs(), nil)
+	if v.Games[0].IgdbURL != "https://www.igdb.com/games/helldivers-2" {
+		t.Errorf("hra s slugem: URL = %q", v.Games[0].IgdbURL)
+	}
+	if v.Games[1].IgdbURL != "" {
+		t.Errorf("ručně přidaná hra nemá mít URL, má %q", v.Games[1].IgdbURL)
+	}
+}
+
 func TestGameInitials(t *testing.T) {
 	cases := map[string]string{
 		"Helldivers 2":   "H2",

@@ -135,8 +135,21 @@
       <div class="rail{{ if $row.IsBest }} is-best{{ end }}">
         {{ template "cover" dict "Cover" $row.Cover "Hue" $row.Hue "Initials" $row.Initials "Size" "md" }}
         <div class="g-body">
-          <div class="g-name" title="{{ $row.Name }}">{{ $row.Name }}</div>
+          <div class="g-name" title="{{ $row.Name }}">
+            {{ if $row.IgdbURL }}<a class="g-link" href="{{ $row.IgdbURL }}" target="_blank" rel="noopener noreferrer" title="{{ $.L.T "game.openIgdb" }}">{{ $row.Name }}<svg class="ext" width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 2.5H2.5v7h7v-2"/><path d="M7 2.5h2.5V5"/><path d="M9.5 2.5 5.5 6.5"/></svg></a>{{ else }}{{ $row.Name }}{{ end }}
+          </div>
           <div class="g-meta">{{ $row.Meta }}</div>
+          <div class="max-wrap">
+            <button type="button" class="max-edit{{ if not $row.MaxKnown }} unset{{ end }}" data-max-edit
+                    aria-label="{{ $.L.T "game.editPlayers" }}">{{ if $row.MaxKnown }}<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.7 10.3 4 4.3 10H2v-2.3z"/></svg>{{ else }}{{ $.L.T "game.setPlayers" }}{{ end }}</button>
+            <form class="max-form" method="post" action="/p/{{ $.Slug }}/games/{{ $row.OptionID }}/max" hidden>
+              <input class="max-in" type="number" name="max" min="1" max="1000" inputmode="numeric"
+                     {{ if $row.MaxKnown }}value="{{ $row.MaxPlayers }}"{{ end }}
+                     placeholder="{{ $.L.T "game.playersHint" }}" aria-label="{{ $.L.T "game.editPlayers" }}" autocomplete="off">
+              <button type="submit" class="max-btn" aria-label="{{ $.L.T "game.savePlayers" }}"><svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 6.4 4.6 9 10 3"/></svg></button>
+              <button type="button" class="max-btn" data-max-cancel aria-label="{{ $.L.T "game.cancelEdit" }}"><svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 3 9 9M9 3 3 9"/></svg></button>
+            </form>
+          </div>
           <div class="r-foot"><span class="bar"><i style="width: {{ $row.Percent }}%"></i></span>
             <span class="r-tally">{{ $row.Yes }}/{{ $row.Total }}</span></div>
           {{ if or $row.IsBest $row.Short }}<div class="chips">
