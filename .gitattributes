@@ -1,0 +1,5 @@
+# Zdrojáky drž v LF, ať se v kontejneru nic nerozbije a diffy nešumí.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.svg text eol=lf

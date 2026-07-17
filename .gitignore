@@ -1,0 +1,15 @@
+# lokální data
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# sestavené binárky
+/kdy-hrajeme
+/kdy-hrajeme.exe
+/out/
+
+# nástroje
+.claude/
+.idea/
+.vscode/

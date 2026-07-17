@@ -1,0 +1,51 @@
+{{ define "content" }}
+<section class="poll-head">
+  <h1 class="poll-title">{{ .L.T "create.heading" }}</h1>
+  <p class="poll-note">{{ .L.T "create.lead" }}</p>
+</section>
+
+<form class="card" method="post" action="/polls" id="create-form">
+  <div>
+    <label class="lbl" for="c-title">{{ .L.T "create.title" }}</label>
+    <input class="field w-full" type="text" id="c-title" name="title" required maxlength="120"
+           placeholder="{{ .L.T "create.titleHint" }}" value="{{ .Form.Title }}" autocomplete="off">
+  </div>
+
+  <div>
+    <label class="lbl" for="c-note">
+      {{ .L.T "create.note" }} <span class="lbl-soft">{{ .L.T "create.noteOptional" }}</span>
+    </label>
+    <input class="field w-full" type="text" id="c-note" name="note" maxlength="500"
+           placeholder="{{ .L.T "create.noteHint" }}" value="{{ .Form.Note }}" autocomplete="off">
+  </div>
+
+  <div>
+    <span class="lbl">{{ .L.T "create.dates" }}</span>
+    <div class="stack" id="opts"
+         data-label-date="{{ .L.T "create.fieldDate" }}"
+         data-label-start="{{ .L.T "create.fieldStart" }}"
+         data-label-end="{{ .L.T "create.fieldEnd" }}"
+         data-label-remove="{{ .L.T "create.removeDate" }}">
+      {{ range .Form.Dates }}
+      <div class="opt-row">
+        <input class="field f-date" type="date" name="day" value="{{ .Day }}" aria-label="{{ $.L.T "create.fieldDate" }}">
+        <input class="field f-time" type="time" name="start" value="{{ .Start }}" aria-label="{{ $.L.T "create.fieldStart" }}">
+        <span class="dash" aria-hidden="true">&rarr;</span>
+        <input class="field f-time" type="time" name="end" value="{{ .End }}" aria-label="{{ $.L.T "create.fieldEnd" }}">
+        <button type="button" class="x" data-act="drop" aria-label="{{ $.L.T "create.removeDate" }}">
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2.5 2.5 9.5 9.5M9.5 2.5 2.5 9.5"/></svg>
+        </button>
+      </div>
+      {{ end }}
+    </div>
+    <div class="row-actions">
+      <button type="button" class="btn btn-sm" id="add-date">{{ .L.T "create.addDate" }}</button>
+    </div>
+  </div>
+
+  <div class="row-actions divide">
+    <button type="submit" class="btn btn-primary">{{ .L.T "create.submit" }}</button>
+  </div>
+</form>
+{{ end }}
