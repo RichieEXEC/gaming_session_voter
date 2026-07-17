@@ -186,7 +186,9 @@ button { font: inherit; cursor: pointer; }
 .hd.is-me .pname { color: var(--amber-text); }
 
 .rail { position: sticky; left: 0; z-index: 1; background: var(--surface); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line-soft); padding: 10px 14px; display: flex; align-items: center; gap: 11px; }
-.rail.is-best { background: var(--amber-wash); box-shadow: inset 3px 0 0 var(--amber); }
+/* Rail je sticky, takže musí být neprůhledný, jinak přes něj při vodorovném
+   posuvu prosvítají buňky. amber-wash je průhledná, tak ji složíme na surface. */
+.rail.is-best { background: linear-gradient(var(--amber-wash), var(--amber-wash)), var(--surface); box-shadow: inset 3px 0 0 var(--amber); }
 .g-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
 .g-name { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-link { color: inherit; text-decoration: none; }
