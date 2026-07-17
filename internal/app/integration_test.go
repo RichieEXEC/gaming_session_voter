@@ -162,9 +162,10 @@ func TestFullSessionFlow(t *testing.T) {
 		t.Fatal("šablona něco sanitizovala na ZgotmplZ (nejspíš inline style mřížky)")
 	}
 
-	// Hra teď má hlas, takže mazání musí být označené k potvrzení.
-	if !strings.Contains(page, `data-game="Helldivers 2" data-confirm="1"`) {
-		t.Fatal("smazání hry s hlasem není označené data-confirm")
+	// Hra teď má hlas, takže mazání musí být označené k potvrzení i s textem.
+	if !strings.Contains(page, `data-confirm="1"`) ||
+		!strings.Contains(page, "U hry Helldivers 2 už někdo hlasoval") {
+		t.Fatal("smazání hry s hlasem není označené k potvrzení")
 	}
 
 	idGame := ids[1][1]
@@ -228,6 +229,43 @@ func TestReclaimVoteByNickname(t *testing.T) {
 	page = body(t, mustGet(t, c, ts.URL+"/p/"+slug))
 	if !strings.Contains(page, `id="nick"`) {
 		t.Fatal("neplatné přihlášení nemá nikoho pustit do úprav")
+	}
+}
+
+// Odebrání sebe smaže vlastní hlas, zruší cookie (zase nový) a nechá ostatní.
+func TestRemoveSelf(t *testing.T) {
+	ts := newTestServer(t, false)
+
+	a := client(t)
+	resp := post(t, a, ts.URL, "/sessions", url.Values{"title": {"Večer"}, "day": {"2026-07-23"}})
+	page := body(t, resp)
+	slug := strings.TrimPrefix(resp.Request.URL.Path, "/p/")
+	dateID := reChoice.FindStringSubmatch(page)[1]
+
+	post(t, a, ts.URL, "/p/"+slug+"/votes", url.Values{"name": {"Richie"}, "choice_" + dateID: {"yes"}}).Body.Close()
+	b := client(t)
+	post(t, b, ts.URL, "/p/"+slug+"/votes", url.Values{"name": {"Dan"}, "choice_" + dateID: {"maybe"}}).Body.Close()
+
+	page = body(t, mustGet(t, a, ts.URL+"/p/"+slug))
+	if !strings.Contains(page, "2 hlasy") {
+		t.Fatalf("čekám 2 hlasy před odebráním")
+	}
+
+	// A se odebere (má cookie).
+	post(t, a, ts.URL, "/p/"+slug+"/votes/delete", url.Values{}).Body.Close()
+
+	page = body(t, mustGet(t, a, ts.URL+"/p/"+slug))
+	if !strings.Contains(page, "1 hlas") {
+		t.Fatal("po odebrání má zbýt jeden hlas")
+	}
+	if !strings.Contains(page, `id="nick"`) {
+		t.Fatal("po odebrání se má člověk vidět jako nový (cookie zrušena)")
+	}
+	if !strings.Contains(page, "Dan") {
+		t.Fatal("odebrání jednoho nesmí sáhnout na cizí hlas")
+	}
+	if strings.Contains(page, `title="Richie"`) {
+		t.Fatal("odebraný hlas nemá zůstat v tabulce")
 	}
 }
 

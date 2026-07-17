@@ -86,6 +86,9 @@ var catalogs = map[Lang]map[string]string{
 		"confirm.cancel":  "Nechat",
 		"confirm.delete":  "Smazat",
 
+		"confirm.removeSelfTitle": "Odebrat se z hlasování?",
+		"confirm.removeSelfBody":  "Smaže se celý tvůj hlas, termíny i hry. Hlasovat pak můžeš zase znovu.",
+
 		"find.placeholder": "Najdi hru a přidej ji",
 		"find.source":      "IGDB",
 		"find.add":         "přidat",
@@ -99,9 +102,10 @@ var catalogs = map[Lang]map[string]string{
 		"strip.join":     "Zapsat se",
 		"strip.reclaim":  "Už jsem hlasoval",
 		"strip.save":     "Uložit vše",
-		"strip.marked":   "Označeno: %d.",
-		"strip.cycle":    "klikáním přepínáš ne, ano, možná",
-		"strip.editing":  "upravuješ svůj hlas.",
+		"strip.marked":     "Označeno: %d.",
+		"strip.cycle":      "klikáním přepínáš ne, ano, možná",
+		"strip.editing":    "upravuješ svůj hlas.",
+		"strip.removeSelf": "Odebrat se",
 
 		"create.heading":      "Nové sezení",
 		"create.lead":         "Zadej termíny a pošli odkaz. Hry přidáte společně až na stránce sezení.",
@@ -144,6 +148,7 @@ var catalogs = map[Lang]map[string]string{
 		"ok.gameRemoved":  "Hra odebrána.",
 		"ok.maxSet":       "Počet hráčů uložen.",
 		"ok.reclaimed":    "Načteno. Uprav svůj hlas a ulož.",
+		"ok.removed":      "Odebráno. Můžeš hlasovat znovu.",
 		"ok.home":         "Zpět na začátek",
 	},
 
@@ -224,6 +229,9 @@ var catalogs = map[Lang]map[string]string{
 		"confirm.cancel": "Keep",
 		"confirm.delete": "Delete",
 
+		"confirm.removeSelfTitle": "Remove yourself?",
+		"confirm.removeSelfBody":  "This deletes your whole vote, dates and games. You can vote again afterwards.",
+
 		"find.placeholder": "Find a game and add it",
 		"find.source":      "IGDB",
 		"find.add":         "add",
@@ -237,9 +245,10 @@ var catalogs = map[Lang]map[string]string{
 		"strip.join":     "Join",
 		"strip.reclaim":  "I already voted",
 		"strip.save":     "Save all",
-		"strip.marked":   "Marked: %d.",
-		"strip.cycle":    "click cells to cycle no, yes, maybe",
-		"strip.editing":  "you are editing your vote.",
+		"strip.marked":     "Marked: %d.",
+		"strip.cycle":      "click cells to cycle no, yes, maybe",
+		"strip.editing":    "you are editing your vote.",
+		"strip.removeSelf": "Remove me",
 
 		"create.heading":      "New session",
 		"create.lead":         "Set the dates and share the link. Games get added together on the session page.",
@@ -282,6 +291,7 @@ var catalogs = map[Lang]map[string]string{
 		"ok.gameRemoved": "Game removed.",
 		"ok.maxSet":      "Player count saved.",
 		"ok.reclaimed":   "Loaded. Edit your vote and save.",
+		"ok.removed":     "Removed. You can vote again.",
 		"ok.home":        "Back to start",
 	},
 }

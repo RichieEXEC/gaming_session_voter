@@ -277,6 +277,9 @@ button { font: inherit; cursor: pointer; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .btn-danger { background: #C4402E; border-color: #C4402E; color: #fff; }
 .btn-danger:hover { background: #D24C39; border-color: #D24C39; }
+/* Odebrat se: nenápadné, aby to nebyla hlavní akce; červené až v ruce. */
+.btn-danger-ghost { background: transparent; border-color: transparent; color: var(--faint); }
+.btn-danger-ghost:hover { background: transparent; color: #D24C39; border-color: rgba(196,64,46,.4); }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 

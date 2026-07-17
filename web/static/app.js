@@ -252,32 +252,47 @@
 
   var confirmDlg = document.getElementById("confirm-delete");
   if (confirmDlg && typeof confirmDlg.showModal === "function") {
-    var pendingForm = null;
+    var titleEl = document.getElementById("confirm-title");
     var bodyEl = document.getElementById("confirm-body");
-    var bodyTpl = confirmDlg.getAttribute("data-body") || "%s";
+    var defaultTitle = titleEl ? titleEl.textContent : "";
+    var pendingOk = null;
 
-    // Submit bublá, tak stačí odchytit ho na dokumentu. Mažeme jen hru,
-    // na kterou už někdo hlasoval (data-confirm); jinak rovnou pryč.
+    // Nadpis i text bere z prvku, který potvrzení vyvolal, takže dialog
+    // slouží mazání hry i odebrání sebe sama.
+    function ask(el, onOk) {
+      if (titleEl) titleEl.textContent = el.getAttribute("data-confirm-title") || defaultTitle;
+      bodyEl.textContent = el.getAttribute("data-confirm-body") || "";
+      pendingOk = onOk;
+      confirmDlg.showModal();
+    }
+
+    // Mazání hry s hlasy: odchycený submit formuláře (data-confirm).
     document.addEventListener("submit", function (e) {
       var f = e.target;
       if (!f.classList || !f.classList.contains("g-drop-form")) return;
       if (f.getAttribute("data-confirm") !== "1") return;
       e.preventDefault();
-      pendingForm = f;
-      bodyEl.textContent = bodyTpl.replace("%s", f.getAttribute("data-game") || "");
-      confirmDlg.showModal();
+      ask(f, function () { f.submit(); }); // form.submit() nespouští submit event
+    });
+
+    // Odebrání sebe: tlačítko s formaction uvnitř hlasovacího formuláře.
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-confirm-self]");
+      if (!btn) return;
+      e.preventDefault();
+      var form = btn.form;
+      ask(btn, function () { if (form) form.requestSubmit(btn); });
     });
 
     confirmDlg.querySelector("[data-confirm-cancel]").addEventListener("click", function () {
       confirmDlg.close();
     });
     confirmDlg.querySelector("[data-confirm-ok]").addEventListener("click", function () {
-      var f = pendingForm;
+      var ok = pendingOk;
       confirmDlg.close();
-      // form.submit() nespouští submit event, takže se potvrzení nezacyklí.
-      if (f) f.submit();
+      if (ok) ok();
     });
-    confirmDlg.addEventListener("close", function () { pendingForm = null; });
+    confirmDlg.addEventListener("close", function () { pendingOk = null; });
   }
 
   /* ---------- ruční počet hráčů ---------- */

@@ -263,6 +263,41 @@ func (s *Server) handleVote(w http.ResponseWriter, r *http.Request) {
 	s.redirectFlash(w, r, slug, "saved", "")
 }
 
+// handleDeleteVote úplně odebere hlas přihlášeného. Jede jen s platnou cookie
+// k tomu hlasu; po smazání cookie zruší, aby se člověk viděl zase jako nový.
+func (s *Server) handleDeleteVote(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	if !sameOrigin(r) {
+		s.fail(w, r, http.StatusForbidden, "err.badRequest", "err.serverLead")
+		return
+	}
+
+	sess, err := s.st.GetSession(slug)
+	if errors.Is(err, store.ErrNotFound) {
+		s.fail(w, r, http.StatusNotFound, "err.notFound", "err.notFoundLead")
+		return
+	}
+	if err != nil {
+		s.log.Error("get session", "err", err, "slug", slug)
+		s.fail(w, r, http.StatusInternalServerError, "err.server", "err.serverLead")
+		return
+	}
+
+	mine := s.currentVote(r, sess)
+	if mine == nil {
+		// Není co odebírat (chybí cookie), jen zpět na sezení.
+		s.redirectFlash(w, r, slug, "", "")
+		return
+	}
+	if err := s.st.DeleteVote(sess.ID, mine.ID); err != nil && !errors.Is(err, store.ErrNotFound) {
+		s.log.Error("delete vote", "err", err, "slug", slug)
+		s.fail(w, r, http.StatusInternalServerError, "err.server", "err.serverLead")
+		return
+	}
+	s.clearVoteCookie(w, r, slug)
+	s.redirectFlash(w, r, slug, "removed", "")
+}
+
 // handleClaim znovu naváže prohlížeč na už existující hlas podle přezdívky.
 // Používá se, když někdo přijde o cookie (vymazal je, jiný prohlížeč). Bez
 // účtů je přezdívka jediná identita, a hlasy jsou v sezení stejně veřejné,
@@ -616,6 +651,8 @@ func flashText(pr i18n.Printer, code string) string {
 		return pr.T("ok.maxSet")
 	case "reclaimed":
 		return pr.T("ok.reclaimed")
+	case "removed":
+		return pr.T("ok.removed")
 	case "novote":
 		return pr.T("err.noVote")
 	case "gameexists":

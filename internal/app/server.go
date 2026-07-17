@@ -81,6 +81,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /sessions", s.handleCreate)
 	s.mux.HandleFunc("GET /p/{slug}", s.handleSession)
 	s.mux.HandleFunc("POST /p/{slug}/votes", s.handleVote)
+	s.mux.HandleFunc("POST /p/{slug}/votes/delete", s.handleDeleteVote)
 	s.mux.HandleFunc("POST /p/{slug}/claim", s.handleClaim)
 	s.mux.HandleFunc("GET /p/{slug}/games/search", s.handleGameSearch)
 	s.mux.HandleFunc("POST /p/{slug}/games", s.handleAddGame)
@@ -274,6 +275,19 @@ func (s *Server) setVoteCookie(w http.ResponseWriter, r *http.Request, slug stri
 		SameSite: http.SameSiteLaxMode,
 		Secure:   isHTTPS(r),
 		MaxAge:   180 * 24 * 3600,
+	})
+}
+
+// clearVoteCookie zruší cookie vlastnictví hlasu (po odebrání se).
+func (s *Server) clearVoteCookie(w http.ResponseWriter, r *http.Request, slug string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     s.voteCookieName(slug),
+		Value:    "",
+		Path:     "/p/" + slug,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   isHTTPS(r),
+		MaxAge:   -1,
 	})
 }
 

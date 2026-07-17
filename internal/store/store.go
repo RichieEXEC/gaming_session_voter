@@ -465,6 +465,23 @@ func (s *Store) UpdateVote(sessionID, voteID int64, choices map[int64]string) er
 	return tx.Commit()
 }
 
+// DeleteVote smaže celý hlas (i s volbami přes ON DELETE CASCADE). Volá se
+// jen když má prohlížeč platnou cookie k tomuhle voteID.
+func (s *Store) DeleteVote(sessionID, voteID int64) error {
+	res, err := s.db.Exec(`DELETE FROM votes WHERE id = ? AND session_id = ?`, voteID, sessionID)
+	if err != nil {
+		return fmt.Errorf("delete vote: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // VoteByID vrátí hlas patřící do daného sezení, jinak ErrNotFound.
 func (s *Store) VoteByID(sessionID, voteID int64) (*Vote, error) {
 	v := &Vote{ID: voteID, Choices: map[int64]string{}}

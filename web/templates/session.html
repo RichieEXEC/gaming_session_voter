@@ -158,7 +158,7 @@
           </div>{{ end }}
         </div>
         <form class="g-drop-form" method="post" action="/p/{{ $.Slug }}/games/{{ $row.OptionID }}/delete"
-              data-game="{{ $row.Name }}"{{ if $row.HasVotes }} data-confirm="1"{{ end }}>
+              {{ if $row.HasVotes }}data-confirm="1" data-confirm-title="{{ $.L.T "confirm.title" }}" data-confirm-body="{{ $.L.T "confirm.body" $row.Name }}"{{ end }}>
           <button type="submit" class="g-drop" aria-label="{{ $.L.T "game.removeLabel" }} {{ $row.Name }}">
             <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2.5 2.5 9.5 9.5M9.5 2.5 2.5 9.5"/></svg>
           </button>
@@ -195,6 +195,10 @@
            maxlength="18" autocomplete="off" required>
     <button type="submit" class="btn" formaction="/p/{{ .Slug }}/claim" formmethod="post">{{ .L.T "strip.reclaim" }}</button>
     {{ end }}
+    {{ if .Editing }}
+    <button type="submit" class="btn btn-danger-ghost" formaction="/p/{{ .Slug }}/votes/delete" formmethod="post" formnovalidate
+            data-confirm-self data-confirm-title="{{ .L.T "confirm.removeSelfTitle" }}" data-confirm-body="{{ .L.T "confirm.removeSelfBody" }}">{{ .L.T "strip.removeSelf" }}</button>
+    {{ end }}
     <button type="submit" class="btn btn-primary">
       {{ if .Editing }}{{ .L.T "strip.save" }}{{ else }}{{ .L.T "strip.join" }}{{ end }}
     </button>
@@ -203,8 +207,8 @@
 
 {{/* Potvrzení mazání hry, na kterou už někdo hlasoval. Bez JS se formulář
      odešle rovnou, s JS se nejdřív zeptáme. */}}
-<dialog class="confirm" id="confirm-delete" data-body="{{ .L.T "confirm.body" }}">
-  <h2 class="confirm-title">{{ .L.T "confirm.title" }}</h2>
+<dialog class="confirm" id="confirm-delete">
+  <h2 class="confirm-title" id="confirm-title">{{ .L.T "confirm.title" }}</h2>
   <p class="confirm-body" id="confirm-body"></p>
   <div class="confirm-actions">
     <button type="button" class="btn" data-confirm-cancel>{{ .L.T "confirm.cancel" }}</button>
