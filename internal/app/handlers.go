@@ -78,6 +78,8 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 	reshow := func(msg string) {
 		s.render(w, r, "new", http.StatusUnprocessableEntity, pageData{
 			L: pr, Title: pr.T("create.heading"), Form: form, Flash: msg,
+			// Kreslíme se na POST /polls, formulář ale žije na "/".
+			Path: "/",
 		})
 	}
 
@@ -271,10 +273,13 @@ func (s *Server) rerenderPoll(
 ) {
 	draft := &store.Vote{Name: strings.TrimSpace(r.FormValue("name")), Choices: choices}
 	s.render(w, r, "poll", http.StatusUnprocessableEntity, pageData{
-		L:       pr,
-		Title:   p.Title,
-		Poll:    p,
-		Slug:    p.Slug,
+		L:     pr,
+		Title: p.Title,
+		Poll:  p,
+		Slug:  p.Slug,
+		// Kreslíme se na POST /p/{slug}/votes, ale přepnutí jazyka musí
+		// vrátit na hlasování, ne na adresu, která GETem neexistuje.
+		Path:    "/p/" + p.Slug,
 		Board:   buildBoard(p, pr, draft),
 		Mine:    draft,
 		Editing: false,
@@ -320,12 +325,27 @@ func (s *Server) handleLang(w http.ResponseWriter, r *http.Request) {
 		Secure:   isHTTPS(r),
 		MaxAge:   365 * 24 * 3600,
 	})
-	// Zpět tam, odkud člověk přišel, ale jen na vlastní cestu.
-	back := r.URL.Query().Get("next")
-	if !strings.HasPrefix(back, "/") || strings.HasPrefix(back, "//") {
-		back = "/"
+	http.Redirect(w, r, safeNext(r.URL.Query().Get("next")), http.StatusSeeOther)
+}
+
+// safeNext propustí jen adresu na tomhle serveru. Cokoliv, co by mohlo
+// odvést člověka jinam, spadne na domovskou stránku: parametr next je
+// vidět v odkazu, takže by se dal poslat podvržený.
+func safeNext(raw string) string {
+	if raw == "" {
+		return "/"
 	}
-	http.Redirect(w, r, back, http.StatusSeeOther)
+	u, err := url.Parse(raw)
+	if err != nil || u.IsAbs() || u.Host != "" || u.Opaque != "" {
+		return "/"
+	}
+	p := u.Path
+	// "//nekde.jinde" i "/\nekde.jinde" umí prohlížeč vzít jako adresu
+	// na cizí server.
+	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.ContainsAny(p, "\\") {
+		return "/"
+	}
+	return p
 }
 
 func validTime(s string) bool {

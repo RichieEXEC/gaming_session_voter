@@ -24,7 +24,7 @@
       <span class="wordmark">{{ .L.T "app.name" }}</span>
     </a>
     <div class="mast-spacer"></div>
-    <a class="lang" href="/lang/{{ if eq .L.Code "cs" }}en{{ else }}cs{{ end }}">{{ .L.T "nav.langName" }}</a>
+    <a class="lang" href="/lang/{{ if eq .L.Code "cs" }}en{{ else }}cs{{ end }}?next={{ .Path }}">{{ .L.T "nav.langName" }}</a>
   </header>
 
   <main>

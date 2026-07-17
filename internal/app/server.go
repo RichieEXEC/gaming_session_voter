@@ -178,6 +178,12 @@ type pageData struct {
 	// dnes. Prázdné, když se formulář překresluje po chybě: tam už je
 	// uvnitř to, co člověk zadal.
 	DefaultDay string
+
+	// Path je adresa, na kterou se má člověk vrátit po přepnutí jazyka.
+	// Doplní ji render(). Handler ji nastaví sám jen tam, kde se stránka
+	// kreslí jako odpověď na POST a r.URL.Path by ukazoval na endpoint,
+	// který se nedá otevřít GETem.
+	Path string
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, page string, code int, data pageData) {
@@ -186,6 +192,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, page string, cod
 		s.log.Error("unknown page", "page", page)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
+	}
+	if data.Path == "" {
+		data.Path = r.URL.Path
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(code)

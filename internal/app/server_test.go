@@ -47,6 +47,43 @@ func TestAssetHashesDifferPerFile(t *testing.T) {
 	}
 }
 
+// Přepnutí jazyka musí vracet tam, odkud se kliklo. Odkaz bez next
+// spadne na domovskou stránku, což lidi vyhazovalo z hlasování.
+func TestLangLinkCarriesNext(t *testing.T) {
+	b, err := fs.ReadFile(web.Files, "templates/layout.html")
+	if err != nil {
+		t.Fatalf("read layout: %v", err)
+	}
+	if !bytes.Contains(b, []byte(`?next={{ .Path }}`)) {
+		t.Error("odkaz na přepnutí jazyka neposílá next, po přepnutí by člověk skončil na /")
+	}
+}
+
+func TestSafeNext(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"/p/abc123", "/p/abc123"},
+		{"/", "/"},
+		{"", "/"},
+		// Cizí server v jakémkoliv převleku končí na domovské stránce.
+		{"//evil.example", "/"},
+		{"/\\evil.example", "/"},
+		{"https://evil.example/x", "/"},
+		{"http://evil.example", "/"},
+		{"javascript:alert(1)", "/"},
+		{"mailto:a@b.c", "/"},
+		{"evil.example", "/"},
+		// Query se zahazuje, aby se nedala protáhnout stará hláška.
+		{"/p/abc?flash=saved", "/p/abc"},
+	}
+	for _, c := range cases {
+		if got := safeNext(c.in); got != c.want {
+			t.Errorf("safeNext(%q) = %q, chci %q", c.in, got, c.want)
+		}
+	}
+}
+
 // Šablona nesmí na statický soubor odkazovat napřímo. Tím by se obešlo
 // verzování a v prohlížeči by po nasazení zůstal viset starý app.js,
 // zatímco HTML by už bylo nové. Přesně tohle se jednou stalo.
