@@ -34,10 +34,30 @@ docker run -p 8080:8080 -v kdyhrajeme-data:/data kdy-hrajeme
 1. New Resource, then point it at this git repository.
 2. Build pack: **Dockerfile** (Coolify detects it; compose also works).
 3. Add a **persistent volume** mounted at `/data`. Without it the database is
-   wiped on every redeploy.
+   wiped on every redeploy. Leave *Source Path* empty so you get a Docker
+   named volume; filling it in makes a bind mount to that host path, which
+   works but points a host directory at the app for no benefit.
 4. Port `8080` is exposed. Coolify terminates TLS in front of the app, which
    the app accounts for via `X-Forwarded-Proto` when setting secure cookies.
 5. Health check endpoint is `/healthz`.
+
+### If it won't start: "out of memory (14)"
+
+```
+ERROR msg="open store" err="ping sqlite: unable to open database file: out of memory (14)"
+```
+
+This is not memory. SQLite code 14 is `SQLITE_CANTOPEN`, and the pure-Go
+driver renders it with that unhelpful text: the app cannot create the
+database file because the mounted `/data` is not writable by it.
+
+A mount always covers whatever the image did to that path, so a build-time
+`chown` cannot fix it. The container therefore starts as root, has the
+entrypoint `chown` the data directory, and drops to the `app` user via
+`su-exec` before running the binary. The app process itself never runs as
+root. If your platform forces a non-root user so the entrypoint cannot
+chown, the app fails fast with a message naming the directory and uid
+instead of the SQLite text.
 
 ### Environment
 

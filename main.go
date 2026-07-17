@@ -22,9 +22,22 @@ func main() {
 	dbPath := env("DB_PATH", "/data/kdyhrajeme.db")
 	addr := ":" + env("PORT", "8080")
 
-	if dir := filepath.Dir(dbPath); dir != "" && dir != "." {
+	dir := filepath.Dir(dbPath)
+	if dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			log.Error("create data dir", "dir", dir, "err", err)
+			os.Exit(1)
+		}
+		// SQLite hlásí nezapisovatelný adresář jako "out of memory (14)",
+		// což pošle člověka hledat úplně jinam. Radši to zjistíme dřív a
+		// řekneme narovinu, co je špatně.
+		if err := checkWritable(dir); err != nil {
+			log.Error("data dir is not writable",
+				"dir", dir,
+				"uid", os.Getuid(),
+				"err", err,
+				"hint", "mount a volume writable by uid 10001, or let the container start as root so the entrypoint can fix it",
+			)
 			os.Exit(1)
 		}
 	}
@@ -79,4 +92,16 @@ func env(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// checkWritable ověří zápis skutečným souborem. Koukat na bity práv
+// nestačí: rozhoduje uid, gid i read-only mount.
+func checkWritable(dir string) error {
+	f, err := os.CreateTemp(dir, ".writetest-*")
+	if err != nil {
+		return err
+	}
+	name := f.Name()
+	f.Close()
+	return os.Remove(name)
 }
