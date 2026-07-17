@@ -156,3 +156,19 @@ func TestQuerySanitizedIntoApicalypse(t *testing.T) {
 		t.Errorf("nečekaný tvar dotazu: %q", stub.lastBody)
 	}
 }
+
+// IGDB opustilo pole "category" (nechalo ho prázdné), takže filtr na něj
+// najednou nevracel nic. Filtrujeme přes game_type; ať se to nevrátí.
+func TestSearchFiltersByGameType(t *testing.T) {
+	stub := newStub(t, `[]`)
+	c := stub.client()
+	if _, err := c.Search(context.Background(), "cokoliv"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stub.lastBody, "game_type = 0") {
+		t.Errorf("dotaz nefiltruje přes game_type: %q", stub.lastBody)
+	}
+	if strings.Contains(stub.lastBody, "category") {
+		t.Errorf("dotaz pořád používá opuštěné pole category: %q", stub.lastBody)
+	}
+}

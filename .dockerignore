@@ -8,3 +8,6 @@ data/
 *.db-wal
 *.db-shm
 poc-preview.html
+.env
+.env.*
+*.env

@@ -99,12 +99,14 @@ func (c *Client) Search(ctx context.Context, query string) ([]Game, error) {
 		return nil, err
 	}
 
-	// Apicalypse dotaz. category = 0 nechá jen hlavní hry (ne DLC/balíčky).
+	// Apicalypse dotaz. game_type = 0 nechá jen hlavní hry (ne DLC/mody).
+	// Pozor: dřív to bylo pole "category", které IGDB opustilo a nechalo
+	// prázdné, takže "where category = 0" najednou nevracelo vůbec nic.
 	body := fmt.Sprintf(
 		`search "%s"; fields name, first_release_date, genres.name, `+
 			`multiplayer_modes.onlinemax, multiplayer_modes.onlinecoopmax, `+
 			`multiplayer_modes.offlinemax, cover.image_id; `+
-			`where category = 0; limit 8;`, q)
+			`where game_type = 0; limit 8;`, q)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.apiURL+"/games", strings.NewReader(body))
 	if err != nil {

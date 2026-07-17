@@ -9,6 +9,11 @@ data/
 /kdy-hrajeme.exe
 /out/
 
+# tajné klíče, nikdy necommitovat
+.env
+.env.*
+*.env
+
 # nástroje
 .claude/
 .idea/
