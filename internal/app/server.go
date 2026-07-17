@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -35,11 +36,19 @@ type Server struct {
 	mux    *http.ServeMux
 	pages  map[string]*template.Template
 	static http.Handler
+
+	// assetVer drží otisk obsahu každého statického souboru. Odkazy na ně
+	// pak nesou ?v=<otisk>, takže po nasazení nové verze prohlížeč sáhne
+	// na jinou adresu a nemůže si držet starý app.js.
+	assetVer map[string]string
 }
 
 func New(st *store.Store, log *slog.Logger) (*Server, error) {
 	s := &Server{st: st, log: log, mux: http.NewServeMux()}
 
+	if err := s.hashAssets(); err != nil {
+		return nil, err
+	}
 	if err := s.parsePages(); err != nil {
 		return nil, err
 	}
@@ -71,9 +80,38 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /lang/{code}", s.handleLang)
 }
 
+// hashAssets spočítá otisk každého souboru ve web/static. Obsah je
+// zapečený v binárce, takže se otisk mění jen s novým buildem.
+func (s *Server) hashAssets() error {
+	s.assetVer = map[string]string{}
+	entries, err := fs.ReadDir(web.Files, "static")
+	if err != nil {
+		return fmt.Errorf("read static dir: %w", err)
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		b, err := fs.ReadFile(web.Files, "static/"+e.Name())
+		if err != nil {
+			return fmt.Errorf("read static file %s: %w", e.Name(), err)
+		}
+		sum := sha256.Sum256(b)
+		s.assetVer[e.Name()] = hex.EncodeToString(sum[:])[:10]
+	}
+	return nil
+}
+
 func (s *Server) cacheStatic(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=3600")
+		if r.URL.Query().Get("v") != "" {
+			// Adresa je vázaná na obsah, takže se držet dá klidně napořád.
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			// Bez otisku se držet nesmí: přesně tím se stal starý app.js
+			// na hodinu nesmrtelným, zatímco HTML už bylo nové.
+			w.Header().Set("Cache-Control", "no-cache")
+		}
 		h.ServeHTTP(w, r)
 	})
 }
@@ -83,7 +121,7 @@ func (s *Server) cacheStatic(h http.Handler) http.Handler {
 func (s *Server) parsePages() error {
 	s.pages = map[string]*template.Template{}
 	for _, name := range []string{"new", "poll", "error"} {
-		t, err := template.New("layout.html").Funcs(funcMap()).ParseFS(
+		t, err := template.New("layout.html").Funcs(s.funcMap()).ParseFS(
 			web.Files, "templates/layout.html", "templates/"+name+".html",
 		)
 		if err != nil {
@@ -102,7 +140,7 @@ var glyphs = map[string]template.HTML{
 	"no":    `<svg class="glyph" viewBox="0 0 12 12" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3.5 6h5"/></svg>`,
 }
 
-func funcMap() template.FuncMap {
+func (s *Server) funcMap() template.FuncMap {
 	return template.FuncMap{
 		"add": func(a, b int) int { return a + b },
 		"glyph": func(v string) template.HTML {
@@ -110,6 +148,14 @@ func funcMap() template.FuncMap {
 				return g
 			}
 			return glyphs["no"]
+		},
+		// asset vrátí adresu s otiskem obsahu. Vždycky přes tohle, jinak
+		// se na nasazení nové verze zapomene v cache prohlížeče.
+		"asset": func(name string) string {
+			if v, ok := s.assetVer[name]; ok {
+				return "/static/" + name + "?v=" + v
+			}
+			return "/static/" + name
 		},
 	}
 }

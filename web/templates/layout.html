@@ -6,8 +6,8 @@
 <title>{{ .Title }} · {{ .L.T "app.name" }}</title>
 <meta name="description" content="{{ .L.T "app.tagline" }}">
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" href="{{ asset "favicon.svg" }}" type="image/svg+xml">
+<link rel="stylesheet" href="{{ asset "app.css" }}">
 </head>
 <body>
 <div class="wrap">
@@ -35,6 +35,6 @@
 {{ if .Flash }}<div class="toast on" id="toast" role="status">{{ .Flash }}</div>
 {{ else }}<div class="toast" id="toast" role="status" aria-live="polite"></div>{{ end }}
 
-<script src="/static/app.js" defer></script>
+<script src="{{ asset "app.js" }}" defer></script>
 </body>
 </html>
