@@ -50,6 +50,10 @@
 
 * { box-sizing: border-box; }
 
+/* Atribut hidden musí schovat i prvky s vlastním display (flex/grid), jinak
+   ho jejich pravidlo přebije. Týká se inline editoru počtu hráčů i výsledků. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--ground);
