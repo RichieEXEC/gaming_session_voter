@@ -60,8 +60,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.wrap { max-width: 1040px; margin: 0 auto; padding: 28px 20px 132px; display: flex; flex-direction: column; gap: 22px; }
+:root { --read: 1040px; }
+
+/* Vnější sloupec smí být široký (využije monitor), ale prosa a shrnutí se
+   drží čtecí šířky --read. Desky se roztáhnou zvlášť, viz níž. */
+.wrap { max-width: 1680px; margin: 0 auto; padding: 28px 24px 132px; display: flex; flex-direction: column; gap: 22px; }
 main { display: flex; flex-direction: column; gap: 22px; }
+
+.mast, .poll-head, .summary { max-width: var(--read); width: 100%; margin-inline: auto; }
 
 /* ---------- hlavička ---------- */
 
@@ -248,6 +254,20 @@ button { font: inherit; cursor: pointer; }
 .btn-danger:hover { background: #D24C39; border-color: #D24C39; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* Na širších obrazovkách se deska roztáhne přesně na svůj obsah, vycentrovaná
+   přes margin auto (ne transform — ten rozbíjí sticky hlavičky). Málo lidí =
+   deska zůstane u čtecí šířky (filler ji dorovná), hodně lidí = využije
+   monitor, a teprve opravdu velká parta nechá vodorovný posuvník uvnitř.
+   Mobil (níž) se nedotýká. */
+@media (min-width: 761px) {
+  .board {
+    width: fit-content;
+    min-width: min(100%, var(--read));
+    max-width: 100%;
+    margin-inline: auto;
+  }
+}
 
 @media (max-width: 760px) {
   :root { --rail: 200px; --col: 46px; --head-h: 104px; }
