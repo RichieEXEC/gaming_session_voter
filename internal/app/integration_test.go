@@ -184,6 +184,53 @@ func TestFullSessionFlow(t *testing.T) {
 	}
 }
 
+// Kdo přijde o cookie, si má umět znovu navázat svůj hlas přezdívkou a
+// upravit ho, aniž by se založil druhý.
+func TestReclaimVoteByNickname(t *testing.T) {
+	ts := newTestServer(t, false)
+
+	// Voliči A založí sezení a zahlasuje jako Richie.
+	a := client(t)
+	resp := post(t, a, ts.URL, "/sessions", url.Values{"title": {"Večer"}, "day": {"2026-07-23"}})
+	page := body(t, resp)
+	slug := strings.TrimPrefix(resp.Request.URL.Path, "/p/")
+	dateID := reChoice.FindStringSubmatch(page)[1]
+	post(t, a, ts.URL, "/p/"+slug+"/votes", url.Values{"name": {"Richie"}, "choice_" + dateID: {"yes"}}).Body.Close()
+
+	// Voliči B (čerstvý prohlížeč, žádná cookie) vidí sebe jako nového.
+	b := client(t)
+	page = body(t, mustGet(t, b, ts.URL+"/p/"+slug))
+	if !strings.Contains(page, `id="nick"`) {
+		t.Fatal("nový prohlížeč má vidět pole pro přezdívku")
+	}
+
+	// B se přihlásí jako Richie -> dostane cookie k existujícímu hlasu.
+	post(t, b, ts.URL, "/p/"+slug+"/claim", url.Values{"name": {"richie"}}).Body.Close() // i jinak psané
+
+	page = body(t, mustGet(t, b, ts.URL+"/p/"+slug))
+	if strings.Contains(page, `id="nick"`) {
+		t.Fatal("po přihlášení už se přezdívka nemá ptát (je v režimu úprav)")
+	}
+	if !strings.Contains(page, "1 hlas") {
+		t.Fatal("po přihlášení má být pořád jen jeden hlas")
+	}
+
+	// B upraví hlas -> pořád jeden hlas, jen změněný.
+	post(t, b, ts.URL, "/p/"+slug+"/votes", url.Values{"choice_" + dateID: {"maybe"}}).Body.Close()
+	page = body(t, mustGet(t, b, ts.URL+"/p/"+slug))
+	if !strings.Contains(page, "1 hlas") {
+		t.Fatal("úprava po přihlášení nesmí založit druhý hlas")
+	}
+
+	// Neexistující jméno se navázat nedá.
+	c := client(t)
+	post(t, c, ts.URL, "/p/"+slug+"/claim", url.Values{"name": {"Nikdo"}}).Body.Close()
+	page = body(t, mustGet(t, c, ts.URL+"/p/"+slug))
+	if !strings.Contains(page, `id="nick"`) {
+		t.Fatal("neplatné přihlášení nemá nikoho pustit do úprav")
+	}
+}
+
 func TestSearchDisabledWithoutIGDB(t *testing.T) {
 	ts := newTestServer(t, false)
 	c := client(t)

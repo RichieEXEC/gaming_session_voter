@@ -193,6 +193,7 @@
     <input class="field" type="text" name="name" id="nick" value="{{ .Mine.Name }}"
            placeholder="{{ .L.T "strip.nickname" }}" aria-label="{{ .L.T "strip.nickname" }}"
            maxlength="18" autocomplete="off" required>
+    <button type="submit" class="btn" formaction="/p/{{ .Slug }}/claim" formmethod="post">{{ .L.T "strip.reclaim" }}</button>
     {{ end }}
     <button type="submit" class="btn btn-primary">
       {{ if .Editing }}{{ .L.T "strip.save" }}{{ else }}{{ .L.T "strip.join" }}{{ end }}

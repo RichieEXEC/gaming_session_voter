@@ -263,6 +263,45 @@ func (s *Server) handleVote(w http.ResponseWriter, r *http.Request) {
 	s.redirectFlash(w, r, slug, "saved", "")
 }
 
+// handleClaim znovu naváže prohlížeč na už existující hlas podle přezdívky.
+// Používá se, když někdo přijde o cookie (vymazal je, jiný prohlížeč). Bez
+// účtů je přezdívka jediná identita, a hlasy jsou v sezení stejně veřejné,
+// takže tohle sedí do modelu důvěry party. Hlas se nepřepisuje: jen se
+// nastaví cookie a stránka se ukáže v režimu úprav s uloženými hlasy.
+func (s *Server) handleClaim(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	if !sameOrigin(r) {
+		s.fail(w, r, http.StatusForbidden, "err.badRequest", "err.serverLead")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "err.badRequest", "err.serverLead")
+		return
+	}
+
+	sess, err := s.st.GetSession(slug)
+	if errors.Is(err, store.ErrNotFound) {
+		s.fail(w, r, http.StatusNotFound, "err.notFound", "err.notFoundLead")
+		return
+	}
+	if err != nil {
+		s.log.Error("get session", "err", err, "slug", slug)
+		s.fail(w, r, http.StatusInternalServerError, "err.server", "err.serverLead")
+		return
+	}
+
+	name := strings.TrimSpace(r.FormValue("name"))
+	for _, v := range sess.Votes {
+		if strings.EqualFold(v.Name, name) {
+			s.setVoteCookie(w, r, slug, v.ID)
+			s.redirectFlash(w, r, slug, "reclaimed", "")
+			return
+		}
+	}
+	s.redirectFlash(w, r, slug, "novote", "")
+}
+
 // rerenderSession ukáže sezení znovu i s tím, co člověk naklikal, aby se po
 // chybě nemusel proklikávat znovu.
 func (s *Server) rerenderSession(
@@ -575,6 +614,10 @@ func flashText(pr i18n.Printer, code string) string {
 		return pr.T("ok.gameRemoved")
 	case "maxset":
 		return pr.T("ok.maxSet")
+	case "reclaimed":
+		return pr.T("ok.reclaimed")
+	case "novote":
+		return pr.T("err.noVote")
 	case "gameexists":
 		return pr.T("err.gameExists")
 	case "gameinvalid":
