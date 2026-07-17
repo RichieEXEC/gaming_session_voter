@@ -15,15 +15,18 @@ import (
 	"strings"
 
 	"github.com/RichieEXEC/gaming_session_voter/internal/i18n"
+	"github.com/RichieEXEC/gaming_session_voter/internal/igdb"
 	"github.com/RichieEXEC/gaming_session_voter/internal/store"
 	"github.com/RichieEXEC/gaming_session_voter/web"
 )
 
 const (
-	maxOptions   = 30
+	maxDates     = 30
+	maxGames     = 40
 	maxTitleLen  = 120
 	maxNoteLen   = 500
 	maxNickLen   = 18
+	maxGameName  = 120
 	maxBodyBytes = 64 << 10
 
 	// dayLayout je tvar data, jak ho posílá <input type="date">.
@@ -32,6 +35,7 @@ const (
 
 type Server struct {
 	st     *store.Store
+	games  *igdb.Client
 	log    *slog.Logger
 	mux    *http.ServeMux
 	pages  map[string]*template.Template
@@ -43,8 +47,8 @@ type Server struct {
 	assetVer map[string]string
 }
 
-func New(st *store.Store, log *slog.Logger) (*Server, error) {
-	s := &Server{st: st, log: log, mux: http.NewServeMux()}
+func New(st *store.Store, games *igdb.Client, log *slog.Logger) (*Server, error) {
+	s := &Server{st: st, games: games, log: log, mux: http.NewServeMux()}
 
 	if err := s.hashAssets(); err != nil {
 		return nil, err
@@ -74,9 +78,12 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /static/", s.cacheStatic(s.static))
 
 	s.mux.HandleFunc("GET /{$}", s.handleNew)
-	s.mux.HandleFunc("POST /polls", s.handleCreate)
-	s.mux.HandleFunc("GET /p/{slug}", s.handlePoll)
+	s.mux.HandleFunc("POST /sessions", s.handleCreate)
+	s.mux.HandleFunc("GET /p/{slug}", s.handleSession)
 	s.mux.HandleFunc("POST /p/{slug}/votes", s.handleVote)
+	s.mux.HandleFunc("GET /p/{slug}/games/search", s.handleGameSearch)
+	s.mux.HandleFunc("POST /p/{slug}/games", s.handleAddGame)
+	s.mux.HandleFunc("POST /p/{slug}/games/{id}/delete", s.handleRemoveGame)
 	s.mux.HandleFunc("GET /lang/{code}", s.handleLang)
 }
 
@@ -105,22 +112,19 @@ func (s *Server) hashAssets() error {
 func (s *Server) cacheStatic(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("v") != "" {
-			// Adresa je vázaná na obsah, takže se držet dá klidně napořád.
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		} else {
-			// Bez otisku se držet nesmí: přesně tím se stal starý app.js
-			// na hodinu nesmrtelným, zatímco HTML už bylo nové.
 			w.Header().Set("Cache-Control", "no-cache")
 		}
 		h.ServeHTTP(w, r)
 	})
 }
 
-// parsePages staví jednu sadu šablon na stránku, aby si stránky
-// navzájem nepřepsaly blok "content".
+// parsePages staví jednu sadu šablon na stránku, aby si stránky navzájem
+// nepřepsaly blok "content".
 func (s *Server) parsePages() error {
 	s.pages = map[string]*template.Template{}
-	for _, name := range []string{"new", "poll", "error"} {
+	for _, name := range []string{"new", "session", "error"} {
 		t, err := template.New("layout.html").Funcs(s.funcMap()).ParseFS(
 			web.Files, "templates/layout.html", "templates/"+name+".html",
 		)
@@ -157,32 +161,45 @@ func (s *Server) funcMap() template.FuncMap {
 			}
 			return "/static/" + name
 		},
+		// dict složí mapu z dvojic, aby šlo předat víc hodnot do vloženého
+		// bloku (šablona "cover").
+		"dict": func(pairs ...any) (map[string]any, error) {
+			if len(pairs)%2 != 0 {
+				return nil, fmt.Errorf("dict: potřebuje sudý počet argumentů")
+			}
+			m := make(map[string]any, len(pairs)/2)
+			for i := 0; i < len(pairs); i += 2 {
+				k, ok := pairs[i].(string)
+				if !ok {
+					return nil, fmt.Errorf("dict: klíč není řetězec")
+				}
+				m[k] = pairs[i+1]
+			}
+			return m, nil
+		},
 	}
 }
 
 type pageData struct {
-	L       i18n.Printer
-	Title   string
-	Flash   string
-	Board   Board
-	Poll    *store.Poll
-	Slug    string
-	Mine    *store.Vote
-	Editing bool
-	Form    createForm
-	Status  int
-	Lead    string
+	L        i18n.Printer
+	Title    string
+	Flash    string
+	View     SessionView
+	Session  *store.Session
+	Slug     string
+	Mine     *store.Vote
+	Editing  bool
+	SearchOn bool
+	Form     createForm
 
-	// DefaultDay je dnešek, jak ho vidí server. Prohlížeč podle něj
-	// pozná, že do pole s datem nikdo nesáhl, a smí ho přepsat na svoje
-	// dnes. Prázdné, když se formulář překresluje po chybě: tam už je
-	// uvnitř to, co člověk zadal.
+	// Lead je podtitulek na chybové stránce.
+	Lead string
+
+	// DefaultDay je dnešek, jak ho vidí server. Prohlížeč podle něj pozná,
+	// že do pole s datem nikdo nesáhl, a smí ho přepsat na svoje dnes.
 	DefaultDay string
 
 	// Path je adresa, na kterou se má člověk vrátit po přepnutí jazyka.
-	// Doplní ji render(). Handler ji nastaví sám jen tam, kde se stránka
-	// kreslí jako odpověď na POST a r.URL.Path by ukazoval na endpoint,
-	// který se nedá otevřít GETem.
 	Path string
 }
 
@@ -199,7 +216,6 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, page string, cod
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(code)
 	if err := t.Execute(w, data); err != nil {
-		// Hlavička už je odeslaná, tak jen zaloguj.
 		s.log.Error("render", "page", page, "err", err)
 	}
 }
@@ -215,9 +231,9 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, code int, titleKey
 
 // --- cookie s vlastnictvím hlasu ---
 //
-// Hodnota je "<voteID>.<hmac>". Bez serverové session: jediné, co to
-// tvrdí, je "tenhle prohlížeč založil tenhle hlas", což na úpravu
-// vlastního hlasu stačí.
+// Hodnota je "<voteID>.<hmac>". Bez serverové session: jediné, co to tvrdí,
+// je "tenhle prohlížeč založil tenhle hlas", což na úpravu vlastního hlasu
+// stačí.
 
 func (s *Server) voteCookieName(slug string) string { return "kh_vote_" + slug }
 
@@ -259,8 +275,8 @@ func (s *Server) setVoteCookie(w http.ResponseWriter, r *http.Request, slug stri
 	})
 }
 
-// isHTTPS bere v potaz, že Coolify běží za reverzní proxy a TLS
-// končí u ní, takže r.TLS je nil i na https adrese.
+// isHTTPS bere v potaz, že Coolify běží za reverzní proxy a TLS končí u ní,
+// takže r.TLS je nil i na https adrese.
 func isHTTPS(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
@@ -268,12 +284,10 @@ func isHTTPS(r *http.Request) bool {
 	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
-// sameOrigin je lehká ochrana proti POSTu z cizí stránky. Formuláře
-// tu nejsou za přihlášením, takže nic silnějšího nedává smysl.
+// sameOrigin je lehká ochrana proti POSTu z cizí stránky.
 func sameOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
-		// Starší prohlížeče Origin u formulářů neposílají.
 		return true
 	}
 	host := r.Header.Get("X-Forwarded-Host")

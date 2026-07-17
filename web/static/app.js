@@ -1,5 +1,6 @@
-// Server vykreslí tabulku i výsledky. Tenhle skript jen zpříjemňuje
-// klikání: bez něj jsou výsledky pořád čitelné, jen se nedá hlasovat.
+// Server vykreslí obě desky i výsledky. Skript jen zpříjemňuje klikání a
+// obsluhuje hledání her. Bez něj jsou výsledky pořád čitelné, jen se nedá
+// klikat ani hledat (hlas ale odeslat lze, drží hodnoty ze serveru).
 (function () {
   "use strict";
 
@@ -13,7 +14,6 @@
 
   var toastEl = document.getElementById("toast");
   var toastTimer;
-
   function toast(msg) {
     if (!toastEl) return;
     toastEl.textContent = msg;
@@ -21,63 +21,97 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { toastEl.classList.remove("on"); }, 1900);
   }
-
-  // Hláška po uložení zmizí sama, ať nezůstane viset přes obsah.
   if (toastEl && toastEl.classList.contains("on")) {
     toastTimer = setTimeout(function () { toastEl.classList.remove("on"); }, 2600);
   }
 
-  /* ---------- tabulka ---------- */
+  /* ---------- náhradní obal (stejné jako na serveru) ---------- */
+
+  function hue(name) {
+    var h = 0;
+    for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+    return h < 0 ? h + 360 : h;
+  }
+  function initials(name) {
+    var words = (name.match(/[\p{L}\p{N}]+/gu) || []);
+    if (!words.length) return "?";
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  function coverEl(game, size) {
+    var c = document.createElement("span");
+    c.className = "cover cover-" + size;
+    c.style.setProperty("--h", hue(game.name));
+    c.setAttribute("aria-hidden", "true");
+    if (game.cover) {
+      var img = document.createElement("img");
+      img.className = "cover-img";
+      img.src = "https://images.igdb.com/igdb/image/upload/t_cover_small/" + game.cover + ".jpg";
+      img.alt = "";
+      img.loading = "lazy";
+      img.onerror = function () { img.remove(); };
+      c.appendChild(img);
+    }
+    var mono = document.createElement("span");
+    mono.className = "cover-mono";
+    mono.textContent = initials(game.name);
+    c.appendChild(mono);
+    return c;
+  }
+
+  /* ---------- klikání v tabulkách ---------- */
 
   var form = document.getElementById("vote-form");
+  var marked = document.getElementById("marked");
+  var markedTpl = marked ? marked.getAttribute("data-tpl") : null;
 
-  if (form) {
-    form.addEventListener("click", function (e) {
-      var cell = e.target.closest(".cell.live");
-      if (!cell) return;
+  function wordFor(board, val) {
+    var p = board === "game" ? "g" : "l";
+    return form.getAttribute("data-" + p + val) || val;
+  }
 
-      var id = cell.getAttribute("data-opt");
-      var input = document.getElementById("in-" + id);
-      var next = VALS[(VALS.indexOf(cell.getAttribute("data-v")) + 1) % VALS.length];
-
-      cell.setAttribute("data-v", next);
-      cell.innerHTML = GLYPH[next];
-      if (input) input.value = next;
-
-      // Popisek pro odečítač obrazovky musí jít s hodnotou.
-      var label = cell.getAttribute("aria-label");
-      if (label) {
-        var head = label.split(":")[0];
-        var word = form.getAttribute("data-label-" + next) || next;
-        cell.setAttribute("aria-label", head + ": " + word + ". " + (form.getAttribute("data-hint") || ""));
-      }
-      updateMarked();
+  function updateMarked() {
+    if (!marked || !markedTpl) return;
+    var n = 0;
+    document.querySelectorAll(".cell.live").forEach(function (c) {
+      if (c.getAttribute("data-v") !== "no") n++;
     });
+    marked.textContent = markedTpl.replace("%d", n);
+  }
 
-    var marked = document.getElementById("marked");
-    var markedTpl = marked ? marked.getAttribute("data-tpl") : null;
+  // Klikání na buňky je delegované na dokument: buňky jsou mimo formulář.
+  document.addEventListener("click", function (e) {
+    var cell = e.target.closest(".cell.live");
+    if (!cell || !form) return;
 
-    function updateMarked() {
-      if (!marked || !markedTpl) return;
-      var n = 0;
-      form.querySelectorAll(".cell.live").forEach(function (c) {
-        if (c.getAttribute("data-v") !== "no") n++;
-      });
-      marked.textContent = markedTpl.replace("%d", n);
-    }
+    var id = cell.getAttribute("data-opt");
+    var next = VALS[(VALS.indexOf(cell.getAttribute("data-v")) + 1) % VALS.length];
+    cell.setAttribute("data-v", next);
+    cell.innerHTML = GLYPH[next];
+
+    var input = document.getElementById("in-" + id);
+    if (input) input.value = next;
+
+    var board = cell.getAttribute("data-board");
+    var prefix = cell.getAttribute("data-prefix") || "";
+    cell.setAttribute("aria-label", prefix + ": " + wordFor(board, next) + ". " + (form.getAttribute("data-hint") || ""));
     updateMarked();
+  });
 
-    // Jméno se propisuje do hlavičky sloupce, aby bylo vidět, čí je.
-    var nick = document.getElementById("nick");
-    var myName = document.getElementById("my-name");
-    if (nick && myName) {
-      var fallback = myName.textContent;
-      nick.addEventListener("input", function () {
-        var v = nick.value.trim();
-        myName.textContent = v || fallback;
-        myName.setAttribute("title", v);
+  updateMarked();
+
+  // Přezdívka se propisuje do hlaviček sloupce "Ty" v obou tabulkách.
+  var nick = document.getElementById("nick");
+  var mynames = document.querySelectorAll("[data-myname]");
+  if (nick && mynames.length) {
+    var fallback = mynames[0].textContent;
+    nick.addEventListener("input", function () {
+      var v = nick.value.trim();
+      mynames.forEach(function (el) {
+        el.textContent = v || fallback;
+        el.setAttribute("title", v);
       });
-    }
+    });
   }
 
   /* ---------- odkaz ---------- */
@@ -89,23 +123,152 @@
       var ok = copy.getAttribute("data-ok");
       var fail = copy.getAttribute("data-fail");
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(url).then(
-          function () { toast(ok); },
-          function () { toast(fail); }
-        );
+        navigator.clipboard.writeText(url).then(function () { toast(ok); }, function () { toast(fail); });
       } else {
         toast(fail);
       }
     });
   }
 
-  /* ---------- zakládání ---------- */
+  /* ---------- hledání her ---------- */
 
-  var opts = document.getElementById("opts");
-  var addBtn = document.getElementById("add-date");
+  var finder = document.querySelector(".finder");
+  var qInput = document.getElementById("game-q");
+  var resultsEl = document.getElementById("game-results");
 
-  // Datum je "YYYY-MM-DD". Počítá se v UTC, aby posun časové zóny
-  // nepřehodil den; přetáčení měsíce, roku i přestupného února řeší Date.
+  if (finder && qInput && resultsEl && finder.getAttribute("data-on") === "1") {
+    var slug = finder.getAttribute("data-slug");
+    var searchTimer, lastQuery = "";
+
+    function hintRow(text) {
+      resultsEl.innerHTML = "";
+      var d = document.createElement("div");
+      d.className = "hint";
+      d.textContent = text;
+      resultsEl.appendChild(d);
+      resultsEl.hidden = false;
+    }
+
+    function renderResults(games) {
+      resultsEl.innerHTML = "";
+      if (!games.length) {
+        hintRow(finder.getAttribute("data-none"));
+        return;
+      }
+      games.forEach(function (g) {
+        var row = document.createElement("div");
+        row.className = "res";
+        row.appendChild(coverEl(g, "sm"));
+
+        var body = document.createElement("span");
+        body.className = "res-body";
+        var name = document.createElement("span");
+        name.className = "res-name";
+        name.textContent = g.name;
+        var meta = document.createElement("span");
+        meta.className = "res-meta";
+        meta.textContent = g.meta;
+        body.appendChild(name);
+        body.appendChild(meta);
+        row.appendChild(body);
+
+        if (g.in) {
+          var tag = document.createElement("span");
+          tag.className = "res-add";
+          tag.textContent = finder.getAttribute("data-already");
+          row.appendChild(tag);
+        } else {
+          var f = document.createElement("form");
+          f.className = "res-form";
+          f.method = "post";
+          f.action = "/p/" + slug + "/games";
+          addHidden(f, "igdb_id", g.igdbId);
+          addHidden(f, "name", g.name);
+          addHidden(f, "year", g.year);
+          addHidden(f, "genre", g.genre);
+          addHidden(f, "max", g.max);
+          addHidden(f, "cover", g.cover);
+          var btn = document.createElement("button");
+          btn.type = "submit";
+          btn.className = "res-add";
+          btn.textContent = finder.getAttribute("data-add");
+          f.appendChild(btn);
+          row.appendChild(f);
+        }
+        resultsEl.appendChild(row);
+      });
+      resultsEl.hidden = false;
+    }
+
+    function addHidden(f, name, val) {
+      var i = document.createElement("input");
+      i.type = "hidden";
+      i.name = name;
+      i.value = val == null ? "" : String(val);
+      f.appendChild(i);
+    }
+
+    function run(q) {
+      fetch("/p/" + slug + "/games/search?q=" + encodeURIComponent(q), {
+        headers: { "Accept": "application/json" }
+      }).then(function (r) { return r.json(); }).then(function (data) {
+        if (qInput.value.trim() !== q) return; // dotaz se mezitím změnil
+        if (data.disabled) { hintRow(finder.getAttribute("data-disabled")); return; }
+        if (data.error) { hintRow(data.error || finder.getAttribute("data-error")); return; }
+        renderResults(data.games || []);
+      }).catch(function () {
+        hintRow(finder.getAttribute("data-error"));
+      });
+    }
+
+    qInput.addEventListener("input", function () {
+      var q = qInput.value.trim();
+      clearTimeout(searchTimer);
+      if (q.length < 2) { resultsEl.hidden = true; resultsEl.innerHTML = ""; lastQuery = ""; return; }
+      if (q === lastQuery) return;
+      lastQuery = q;
+      searchTimer = setTimeout(function () { run(q); }, 220);
+    });
+
+    qInput.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { qInput.value = ""; resultsEl.hidden = true; resultsEl.innerHTML = ""; lastQuery = ""; }
+    });
+  }
+
+  /* ---------- potvrzení mazání hry s hlasy ---------- */
+
+  var confirmDlg = document.getElementById("confirm-delete");
+  if (confirmDlg && typeof confirmDlg.showModal === "function") {
+    var pendingForm = null;
+    var bodyEl = document.getElementById("confirm-body");
+    var bodyTpl = confirmDlg.getAttribute("data-body") || "%s";
+
+    // Submit bublá, tak stačí odchytit ho na dokumentu. Mažeme jen hru,
+    // na kterou už někdo hlasoval (data-confirm); jinak rovnou pryč.
+    document.addEventListener("submit", function (e) {
+      var f = e.target;
+      if (!f.classList || !f.classList.contains("g-drop-form")) return;
+      if (f.getAttribute("data-confirm") !== "1") return;
+      e.preventDefault();
+      pendingForm = f;
+      bodyEl.textContent = bodyTpl.replace("%s", f.getAttribute("data-game") || "");
+      confirmDlg.showModal();
+    });
+
+    confirmDlg.querySelector("[data-confirm-cancel]").addEventListener("click", function () {
+      confirmDlg.close();
+    });
+    confirmDlg.querySelector("[data-confirm-ok]").addEventListener("click", function () {
+      var f = pendingForm;
+      confirmDlg.close();
+      // form.submit() nespouští submit event, takže se potvrzení nezacyklí.
+      if (f) f.submit();
+    });
+    confirmDlg.addEventListener("close", function () { pendingForm = null; });
+  }
+
+  /* ---------- zakládání (stránka nového sezení) ---------- */
+
   function addDays(iso, n) {
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
     if (!m) return "";
@@ -114,17 +277,15 @@
     d.setUTCDate(d.getUTCDate() + n);
     return d.toISOString().slice(0, 10);
   }
-
   function todayISO() {
     var d = new Date();
-    var mm = String(d.getMonth() + 1);
-    var dd = String(d.getDate());
+    var mm = String(d.getMonth() + 1), dd = String(d.getDate());
     return d.getFullYear() + "-" + (mm.length < 2 ? "0" + mm : mm) + "-" + (dd.length < 2 ? "0" + dd : dd);
   }
 
+  var opts = document.getElementById("opts");
+  var addBtn = document.getElementById("add-date");
   if (opts && addBtn) {
-    // Server zná dnešek jen podle svého TZ. Dokud do pole nikdo nesáhl,
-    // srovnáme ho na dnešek podle prohlížeče.
     var defaultDay = opts.getAttribute("data-default-day");
     if (defaultDay) {
       var firstDay = opts.querySelector('input[name="day"]');
@@ -134,8 +295,6 @@
       }
     }
 
-    // Nový termín = den po posledním zadaném. Když je poslední řádek
-    // prázdný, bereme poslední vyplněný nad ním; když není žádný, dnešek.
     function nextDay() {
       var days = opts.querySelectorAll('input[name="day"]');
       for (var i = days.length - 1; i >= 0; i--) {
@@ -147,14 +306,9 @@
 
     addBtn.addEventListener("click", function () {
       var rows = opts.querySelectorAll(".opt-row");
-      var last = rows[rows.length - 1];
-      var row = last.cloneNode(true);
+      var row = rows[rows.length - 1].cloneNode(true);
       var day = nextDay();
-
-      row.querySelectorAll("input").forEach(function (f) {
-        if (f.name === "day") f.value = day;
-        // Čas se nechá podle posledního řádku, obvykle sedí.
-      });
+      row.querySelectorAll("input").forEach(function (f) { if (f.name === "day") f.value = day; });
       opts.appendChild(row);
       var d = row.querySelector('input[name="day"]');
       if (d) d.focus();
@@ -165,10 +319,7 @@
       if (!btn) return;
       var rows = opts.querySelectorAll(".opt-row");
       if (rows.length <= 1) {
-        // Poslední řádek se nemaže, jen vyprázdní.
-        rows[0].querySelectorAll("input").forEach(function (f) {
-          if (f.name === "day") f.value = "";
-        });
+        rows[0].querySelectorAll("input").forEach(function (f) { if (f.name === "day") f.value = ""; });
         return;
       }
       btn.closest(".opt-row").remove();

@@ -1,4 +1,5 @@
-// Command kdy-hrajeme je malý server na hlasování o termínech.
+// Command kdy-hrajeme je malý server na plánování herních sezení:
+// hlasování o termínu i o hře na jednom místě.
 package main
 
 import (
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/RichieEXEC/gaming_session_voter/internal/app"
+	"github.com/RichieEXEC/gaming_session_voter/internal/igdb"
 	"github.com/RichieEXEC/gaming_session_voter/internal/store"
 )
 
@@ -49,7 +51,16 @@ func main() {
 	}
 	defer st.Close()
 
-	handler, err := app.New(st, log)
+	// IGDB je volitelné. Bez client id/secret jede aplikace dál jen
+	// s termíny a hledání her se schová. TOKEN_URL/API_URL jsou pro test.
+	games := igdb.New(
+		os.Getenv("IGDB_CLIENT_ID"),
+		os.Getenv("IGDB_CLIENT_SECRET"),
+		os.Getenv("IGDB_TOKEN_URL"),
+		os.Getenv("IGDB_API_URL"),
+	)
+
+	handler, err := app.New(st, games, log)
 	if err != nil {
 		log.Error("build app", "err", err)
 		os.Exit(1)
@@ -79,7 +90,7 @@ func main() {
 		close(idle)
 	}()
 
-	log.Info("listening", "addr", addr, "db", dbPath)
+	log.Info("listening", "addr", addr, "db", dbPath, "gameSearch", games.Enabled())
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error("listen", "err", err)
 		os.Exit(1)

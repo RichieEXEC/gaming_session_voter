@@ -17,10 +17,13 @@ import (
 //go:embed schema.sql
 var schema string
 
-// ErrDuplicateName znamená, že přezdívka už v tomto hlasování je.
-var ErrDuplicateName = errors.New("store: nickname already used in this poll")
+// ErrDuplicateName znamená, že přezdívka už v tomto sezení je.
+var ErrDuplicateName = errors.New("store: nickname already used in this session")
 
-// ErrNotFound je vrácena, když hlasování neexistuje.
+// ErrDuplicateGame znamená, že tahle hra už v sezení je.
+var ErrDuplicateGame = errors.New("store: game already in this session")
+
+// ErrNotFound je vrácena, když sezení (nebo možnost) neexistuje.
 var ErrNotFound = errors.New("store: not found")
 
 type Store struct {
@@ -28,34 +31,75 @@ type Store struct {
 	secret []byte
 }
 
-type Poll struct {
+// Session je jedno sezení: termíny, hry a hlasy k obojímu.
+type Session struct {
 	ID        int64
 	Slug      string
 	Title     string
 	Note      string
 	CreatedAt time.Time
-	Options   []Option
+	Dates     []DateOption
+	Games     []GameOption
 	Votes     []Vote
 }
 
-type Option struct {
+// DateOption je jeden navržený termín.
+type DateOption struct {
 	ID      int64
 	Day     string // YYYY-MM-DD
 	StartAt string // HH:MM, může být prázdné
 	EndAt   string // HH:MM, může být prázdné
 }
 
+// GameOption je jedna navržená hra. Data jsou snímek z IGDB pořízený při
+// přidání, nečtou se znovu při každém zobrazení. Year a MaxPlayers rovné
+// nule znamenají "nevíme".
+type GameOption struct {
+	ID         int64
+	IGDBID     int64
+	Name       string
+	Year       int
+	Genre      string
+	MaxPlayers int
+	Cover      string // IGDB image_id, prázdné = bez obalu
+}
+
+// Vote je hlas jednoho člověka. Choices mapuje ID možnosti (termínu i hry)
+// na yes|maybe|no.
 type Vote struct {
 	ID      int64
 	Name    string
-	Choices map[int64]string // ID termínu -> yes|maybe|no
+	Choices map[int64]string
 }
 
-// NewOption je vstup pro zakládání hlasování.
-type NewOption struct {
+// AllOptionIDs vrátí ID všech možností v sezení, termínů i her. Používá se
+// při ukládání hlasu, aby se braly jen možnosti, které opravdu existují.
+func (s *Session) AllOptionIDs() map[int64]bool {
+	ids := make(map[int64]bool, len(s.Dates)+len(s.Games))
+	for _, d := range s.Dates {
+		ids[d.ID] = true
+	}
+	for _, g := range s.Games {
+		ids[g.ID] = true
+	}
+	return ids
+}
+
+// NewDate je vstup pro zakládání sezení.
+type NewDate struct {
 	Day     string
 	StartAt string
 	EndAt   string
+}
+
+// NewGame je snímek hry z IGDB, který se ukládá při přidání.
+type NewGame struct {
+	IGDBID     int64
+	Name       string
+	Year       int
+	Genre      string
+	MaxPlayers int
+	Cover      string
 }
 
 func Open(path string) (*Store, error) {
@@ -75,9 +119,9 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("ping sqlite: %w", err)
 	}
-	if _, err := db.Exec(schema); err != nil {
+	if err := migrate(db); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("apply schema: %w", err)
+		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
 	s := &Store{db: db}
@@ -122,7 +166,9 @@ func newSlug() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
-func (s *Store) CreatePoll(title, note string, opts []NewOption) (string, error) {
+// CreateSession založí sezení s termíny. Hry se přidávají až na stránce
+// sezení, kdokoliv z party.
+func (s *Store) CreateSession(title, note string, dates []NewDate) (string, error) {
 	slug, err := newSlug()
 	if err != nil {
 		return "", fmt.Errorf("slug: %w", err)
@@ -136,23 +182,24 @@ func (s *Store) CreatePoll(title, note string, opts []NewOption) (string, error)
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	res, err := tx.Exec(
-		`INSERT INTO polls (slug, title, note, created_at) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO sessions (slug, title, note, created_at) VALUES (?, ?, ?, ?)`,
 		slug, title, note, now,
 	)
 	if err != nil {
-		return "", fmt.Errorf("insert poll: %w", err)
+		return "", fmt.Errorf("insert session: %w", err)
 	}
-	pollID, err := res.LastInsertId()
+	sessionID, err := res.LastInsertId()
 	if err != nil {
 		return "", err
 	}
 
-	for i, o := range opts {
+	for i, d := range dates {
 		if _, err := tx.Exec(
-			`INSERT INTO options (poll_id, day, start_at, end_at, position) VALUES (?, ?, ?, ?, ?)`,
-			pollID, o.Day, o.StartAt, o.EndAt, i,
+			`INSERT INTO options (session_id, kind, day, start_at, end_at, position)
+			 VALUES (?, 'date', ?, ?, ?, ?)`,
+			sessionID, d.Day, d.StartAt, d.EndAt, i,
 		); err != nil {
-			return "", fmt.Errorf("insert option: %w", err)
+			return "", fmt.Errorf("insert date: %w", err)
 		}
 	}
 
@@ -162,51 +209,138 @@ func (s *Store) CreatePoll(title, note string, opts []NewOption) (string, error)
 	return slug, nil
 }
 
-func (s *Store) GetPoll(slug string) (*Poll, error) {
-	p := &Poll{}
+// AddGame přidá hru do sezení. Vrací ErrDuplicateGame, pokud tam ta hra
+// (podle IGDB id) už je.
+func (s *Store) AddGame(sessionID int64, g NewGame) (int64, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	var pos int
+	// Nová hra jde na konec seznamu her.
+	if err := tx.QueryRow(
+		`SELECT COALESCE(MAX(position), -1) + 1 FROM options WHERE session_id = ? AND kind = 'game'`,
+		sessionID,
+	).Scan(&pos); err != nil {
+		return 0, fmt.Errorf("next position: %w", err)
+	}
+
+	res, err := tx.Exec(
+		`INSERT INTO options (session_id, kind, igdb_id, name, year, genre, max_players, cover, position, day)
+		 VALUES (?, 'game', ?, ?, ?, ?, ?, ?, ?, '')`,
+		sessionID, g.IGDBID, g.Name, g.Year, g.Genre, g.MaxPlayers, g.Cover, pos,
+	)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return 0, ErrDuplicateGame
+		}
+		return 0, fmt.Errorf("insert game: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+// RemoveGame odebere hru ze sezení i s hlasy pro ni (přes ON DELETE CASCADE
+// v choices). Termín odebrat nejde, jen hru.
+func (s *Store) RemoveGame(sessionID, optionID int64) error {
+	res, err := s.db.Exec(
+		`DELETE FROM options WHERE id = ? AND session_id = ? AND kind = 'game'`,
+		optionID, sessionID,
+	)
+	if err != nil {
+		return fmt.Errorf("delete game: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) GetSession(slug string) (*Session, error) {
+	sess := &Session{}
 	var created string
 	err := s.db.QueryRow(
-		`SELECT id, slug, title, note, created_at FROM polls WHERE slug = ?`, slug,
-	).Scan(&p.ID, &p.Slug, &p.Title, &p.Note, &created)
+		`SELECT id, slug, title, note, created_at FROM sessions WHERE slug = ?`, slug,
+	).Scan(&sess.ID, &sess.Slug, &sess.Title, &sess.Note, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("select poll: %w", err)
+		return nil, fmt.Errorf("select session: %w", err)
 	}
-	p.CreatedAt, _ = time.Parse(time.RFC3339, created)
+	sess.CreatedAt, _ = time.Parse(time.RFC3339, created)
 
-	rows, err := s.db.Query(
-		`SELECT id, day, start_at, end_at FROM options WHERE poll_id = ? ORDER BY day, position`, p.ID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("select options: %w", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var o Option
-		if err := rows.Scan(&o.ID, &o.Day, &o.StartAt, &o.EndAt); err != nil {
-			return nil, err
-		}
-		p.Options = append(p.Options, o)
-	}
-	if err := rows.Err(); err != nil {
+	if err := s.loadOptions(sess); err != nil {
 		return nil, err
 	}
-
-	if err := s.loadVotes(p); err != nil {
+	if err := s.loadVotes(sess); err != nil {
 		return nil, err
 	}
-	return p, nil
+	return sess, nil
 }
 
-func (s *Store) loadVotes(p *Poll) error {
+func (s *Store) loadOptions(sess *Session) error {
+	rows, err := s.db.Query(
+		`SELECT id, kind, day, start_at, end_at, igdb_id, name, year, genre, max_players, cover
+		   FROM options
+		  WHERE session_id = ?
+		  ORDER BY kind DESC, position, day`, // 'date' > 'game' abecedně, termíny se řadí přes ORDER BY day níž
+		sess.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("select options: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			id                        int64
+			kind, day, start, end     string
+			igdbID                    sql.NullInt64
+			name, genre, cover        string
+			year, maxPlayers          int
+		)
+		if err := rows.Scan(&id, &kind, &day, &start, &end, &igdbID, &name, &year, &genre, &maxPlayers, &cover); err != nil {
+			return err
+		}
+		if kind == "game" {
+			sess.Games = append(sess.Games, GameOption{
+				ID: id, IGDBID: igdbID.Int64, Name: name, Year: year,
+				Genre: genre, MaxPlayers: maxPlayers, Cover: cover,
+			})
+		} else {
+			sess.Dates = append(sess.Dates, DateOption{ID: id, Day: day, StartAt: start, EndAt: end})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// Termíny chronologicky (ORDER BY den + position výše řadí uvnitř kind,
+	// ale kind DESC dá nejdřív termíny; den je hlavní klíč pro ně).
+	sortDates(sess.Dates)
+	return nil
+}
+
+func (s *Store) loadVotes(sess *Session) error {
 	rows, err := s.db.Query(
 		`SELECT v.id, v.name, c.option_id, c.value
 		   FROM votes v
 		   LEFT JOIN choices c ON c.vote_id = v.id
-		  WHERE v.poll_id = ?
-		  ORDER BY v.created_at, v.id`, p.ID,
+		  WHERE v.session_id = ?
+		  ORDER BY v.created_at, v.id`, sess.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("select votes: %w", err)
@@ -239,14 +373,14 @@ func (s *Store) loadVotes(p *Poll) error {
 		return err
 	}
 	for _, id := range order {
-		p.Votes = append(p.Votes, *byID[id])
+		sess.Votes = append(sess.Votes, *byID[id])
 	}
 	return nil
 }
 
-// SaveVote založí nový hlas. Vrací ErrDuplicateName, pokud přezdívka
-// v tomhle hlasování už je.
-func (s *Store) SaveVote(pollID int64, name string, choices map[int64]string) (int64, error) {
+// SaveVote založí nový hlas napříč oběma deskami. Vrací ErrDuplicateName,
+// pokud přezdívka v sezení už je.
+func (s *Store) SaveVote(sessionID int64, name string, choices map[int64]string) (int64, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return 0, err
@@ -255,8 +389,8 @@ func (s *Store) SaveVote(pollID int64, name string, choices map[int64]string) (i
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	res, err := tx.Exec(
-		`INSERT INTO votes (poll_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)`,
-		pollID, name, now, now,
+		`INSERT INTO votes (session_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)`,
+		sessionID, name, now, now,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -277,9 +411,9 @@ func (s *Store) SaveVote(pollID int64, name string, choices map[int64]string) (i
 	return voteID, nil
 }
 
-// UpdateVote přepíše hlas, který už existuje. Volá se jen když je
-// v cookie platný podpis pro tohle voteID.
-func (s *Store) UpdateVote(pollID, voteID int64, choices map[int64]string) error {
+// UpdateVote přepíše hlas, který už existuje. Volá se jen když je v cookie
+// platný podpis pro tohle voteID.
+func (s *Store) UpdateVote(sessionID, voteID int64, choices map[int64]string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -288,7 +422,7 @@ func (s *Store) UpdateVote(pollID, voteID int64, choices map[int64]string) error
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	res, err := tx.Exec(
-		`UPDATE votes SET updated_at = ? WHERE id = ? AND poll_id = ?`, now, voteID, pollID,
+		`UPDATE votes SET updated_at = ? WHERE id = ? AND session_id = ?`, now, voteID, sessionID,
 	)
 	if err != nil {
 		return fmt.Errorf("update vote: %w", err)
@@ -309,11 +443,11 @@ func (s *Store) UpdateVote(pollID, voteID int64, choices map[int64]string) error
 	return tx.Commit()
 }
 
-// VoteByID vrátí hlas patřící do daného hlasování, jinak ErrNotFound.
-func (s *Store) VoteByID(pollID, voteID int64) (*Vote, error) {
+// VoteByID vrátí hlas patřící do daného sezení, jinak ErrNotFound.
+func (s *Store) VoteByID(sessionID, voteID int64) (*Vote, error) {
 	v := &Vote{ID: voteID, Choices: map[int64]string{}}
 	err := s.db.QueryRow(
-		`SELECT name FROM votes WHERE id = ? AND poll_id = ?`, voteID, pollID,
+		`SELECT name FROM votes WHERE id = ? AND session_id = ?`, voteID, sessionID,
 	).Scan(&v.Name)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -349,6 +483,15 @@ func writeChoices(tx *sql.Tx, voteID int64, choices map[int64]string) error {
 		}
 	}
 	return nil
+}
+
+// sortDates řadí termíny podle data vzestupně. Neplatné datum jde na konec.
+func sortDates(dates []DateOption) {
+	for i := 1; i < len(dates); i++ {
+		for j := i; j > 0 && dates[j].Day < dates[j-1].Day; j-- {
+			dates[j], dates[j-1] = dates[j-1], dates[j]
+		}
+	}
 }
 
 func isUniqueViolation(err error) bool {

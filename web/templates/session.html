@@ -1,0 +1,215 @@
+{{ define "content" }}
+<section class="poll-head">
+  <h1 class="poll-title">{{ .Session.Title }}</h1>
+  {{ if .Session.Note }}<p class="poll-note">{{ .Session.Note }}</p>{{ end }}
+  <p class="poll-note">{{ .L.T "session.lead" }}</p>
+  <div class="poll-meta">
+    <span class="meta-item">{{ .L.N (len .Session.Dates) "date" }}</span>
+    <span class="meta-item">{{ .L.N (len .Session.Games) "game" }}</span>
+    <span class="meta-item">{{ .L.N .View.Voters "vote" }}</span>
+    <button type="button" class="btn btn-sm" id="copy-link"
+            data-ok="{{ .L.T "ok.copied" }}" data-fail="{{ .L.T "ok.copyFailed" }}">{{ .L.T "nav.copyLink" }}</button>
+    <a class="btn btn-sm" href="/">{{ .L.T "nav.newSession" }}</a>
+  </div>
+</section>
+
+{{/* ---- shrnutí: dvě poloviny jedné odpovědi ---- */}}
+<section class="summary">
+  {{ with .View.Lead }}
+  <div class="sum">
+    <div class="sum-body">
+      <div class="sum-label">{{ $.L.T "sum.leadDate" }}</div>
+      <div class="sum-main">{{ .Dow }} {{ .Day }} {{ .Month }}</div>
+      {{ if .Times }}<div class="sum-sub">{{ .Times }}</div>{{ end }}
+    </div>
+    <div><div class="sum-count">{{ .Yes }}<small>/{{ $.View.Voters }}</small></div>
+      <div class="sum-cap">{{ $.L.T "sum.firmYes" }}</div></div>
+  </div>
+  {{ else }}
+  <div class="sum pending"><div class="sum-body">
+    <div class="sum-label">{{ .L.T "sum.leadDate" }}</div>
+    <div class="sum-main">&mdash;</div><div class="sum-sub">{{ .L.T "sum.pending" }}</div>
+  </div></div>
+  {{ end }}
+
+  {{ with .View.Best }}
+  <div class="sum">
+    {{ template "cover" dict "Cover" .Cover "Hue" .Hue "Initials" .Initials "Size" "lg" }}
+    <div class="sum-body">
+      <div class="sum-label">{{ $.L.T "sum.leadGame" }}</div>
+      <div class="sum-main name">{{ .Name }}</div>
+      <div class="sum-sub">{{ .Meta }}</div>
+    </div>
+    <div><div class="sum-count">{{ .Yes }}<small>/{{ $.View.Voters }}</small></div>
+      <div class="sum-cap">{{ $.L.T "sum.firmYes" }}</div></div>
+  </div>
+  {{ else }}
+  <div class="sum pending"><div class="sum-body">
+    <div class="sum-label">{{ .L.T "sum.leadGame" }}</div>
+    <div class="sum-main">&mdash;</div><div class="sum-sub">{{ .L.T "sum.pending" }}</div>
+  </div></div>
+  {{ end }}
+</section>
+
+{{ $cols := add (len .View.Names) 1 }}
+
+{{/* ---- deska KDY (termíny) ---- */}}
+<section class="board" id="kdy">
+  <div class="board-bar">
+    <span class="board-step">{{ .L.T "board.kdy" }}</span>
+    <h2>{{ .L.T "board.dateHeading" }}</h2>
+    <div class="spacer"></div>
+    {{ template "key" . }}
+  </div>
+  <div class="scroller"><div class="matrix" style="grid-template-columns: var(--rail) repeat({{ $cols }}, var(--col)) minmax(0, 1fr);">
+    <div class="hd hd-rail"><span>{{ .L.T "board.date" }}</span></div>
+    <div class="hd is-me"><span class="pname" data-myname>{{ if .Mine.Name }}{{ .Mine.Name }}{{ else }}{{ .L.T "board.you" }}{{ end }}</span></div>
+    {{ range .View.Names }}<div class="hd"><span class="pname" title="{{ . }}">{{ . }}</span></div>{{ end }}
+    <div class="hd-end"></div>
+
+    {{ range $row := .View.Dates }}
+      {{ $prefix := printf "%s %s %s" $row.Dow $row.Day $row.Month }}
+      <div class="rail{{ if $row.IsBest }} is-best{{ end }}"><div class="g-body">
+        <div class="d-date"><span class="d-dow">{{ $row.Dow }}</span>{{ $row.Day }} {{ $row.Month }}</div>
+        {{ if $row.Times }}<div class="g-meta">{{ $row.Times }}</div>{{ end }}
+        <div class="r-foot"><span class="bar"><i style="width: {{ $row.Percent }}%"></i></span>
+          <span class="r-tally">{{ $row.Yes }}/{{ $row.Total }}</span></div>
+        {{ if $row.IsBest }}<div class="chips"><span class="chip-best">{{ $.L.T "board.best" }}</span></div>{{ end }}
+      </div></div>
+      <button type="button" class="cell live{{ if $row.IsBest }} is-best{{ end }}" data-opt="{{ $row.OptionID }}"
+              data-v="{{ $row.Mine }}" data-board="date" data-prefix="{{ $prefix }}"
+              aria-label="{{ $prefix }}: {{ $.L.T (printf "cell.%s" $row.Mine) }}. {{ $.L.T "cell.hint" }}">{{ glyph $row.Mine }}</button>
+      {{ range $row.Cells }}<div class="cell{{ if $row.IsBest }} is-best{{ end }}" data-v="{{ .Value }}" title="{{ .Title }}">{{ glyph .Value }}</div>{{ end }}
+      <div class="end{{ if $row.IsBest }} is-best{{ end }}"></div>
+    {{ end }}
+  </div></div>
+</section>
+
+{{/* ---- deska CO (hry) ---- */}}
+<section class="board" id="co">
+  <div class="board-bar">
+    <span class="board-step">{{ .L.T "board.co" }}</span>
+    <h2>{{ .L.T "board.gameHeading" }}</h2>
+    <div class="spacer"></div>
+    {{ template "key" . }}
+  </div>
+
+  <div class="derived">
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="5.6"/><path d="M7 6.2v3.4"/><path d="M7 4.3v.1"/></svg>
+    <div>
+      {{ with .View.Lead }}
+        {{ $.L.T "derived.lead" (printf "%s %s %s" .Dow .Day .Month) ($.L.N .Yes "person") }}
+        <span class="prov">{{ $.L.T "derived.tag" }}</span>
+      {{ else }}
+        {{ .L.T "derived.none" }}
+      {{ end }}
+    </div>
+  </div>
+
+  <div class="finder" data-slug="{{ .Slug }}"
+       data-on="{{ if .SearchOn }}1{{ else }}0{{ end }}"
+       data-add="{{ .L.T "find.add" }}" data-already="{{ .L.T "find.already" }}"
+       data-none="{{ .L.T "find.none" }}" data-disabled="{{ .L.T "find.disabled" }}"
+       data-error="{{ .L.T "find.error" }}">
+    <div class="finder-bar">
+      <svg class="finder-ico" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14" stroke-linecap="round"/></svg>
+      <input class="finder-in" id="game-q" type="search" autocomplete="off"
+             placeholder="{{ .L.T "find.placeholder" }}" aria-label="{{ .L.T "find.placeholder" }}"
+             {{ if not .SearchOn }}disabled{{ end }}>
+      <span class="finder-src">{{ .L.T "find.source" }}</span>
+    </div>
+    <div class="results" id="game-results" role="listbox" hidden></div>
+    {{ if not .SearchOn }}<div class="hint">{{ .L.T "find.disabled" }}</div>{{ end }}
+  </div>
+
+  {{ if not .View.Games }}
+    <div class="empty">{{ .L.T "board.emptyGames" }}</div>
+  {{ else }}
+  <div class="scroller"><div class="matrix" style="grid-template-columns: var(--rail) repeat({{ $cols }}, var(--col)) minmax(0, 1fr);">
+    <div class="hd hd-rail"><span>{{ .L.T "board.game" }}</span></div>
+    <div class="hd is-me"><span class="pname" data-myname>{{ if .Mine.Name }}{{ .Mine.Name }}{{ else }}{{ .L.T "board.you" }}{{ end }}</span></div>
+    {{ range .View.Names }}<div class="hd"><span class="pname" title="{{ . }}">{{ . }}</span></div>{{ end }}
+    <div class="hd-end"></div>
+
+    {{ range $row := .View.Games }}
+      <div class="rail{{ if $row.IsBest }} is-best{{ end }}">
+        {{ template "cover" dict "Cover" $row.Cover "Hue" $row.Hue "Initials" $row.Initials "Size" "md" }}
+        <div class="g-body">
+          <div class="g-name" title="{{ $row.Name }}">{{ $row.Name }}</div>
+          <div class="g-meta">{{ $row.Meta }}</div>
+          <div class="r-foot"><span class="bar"><i style="width: {{ $row.Percent }}%"></i></span>
+            <span class="r-tally">{{ $row.Yes }}/{{ $row.Total }}</span></div>
+          {{ if or $row.IsBest $row.Short }}<div class="chips">
+            {{ if $row.IsBest }}<span class="chip-best">{{ $.L.T "board.best" }}</span>{{ end }}
+            {{ if $row.Short }}<span class="chip-tight" title="{{ $row.TightTitle }}">{{ $.L.T "game.cap" }} {{ $row.MaxPlayers }}</span>{{ end }}
+          </div>{{ end }}
+        </div>
+        <form class="g-drop-form" method="post" action="/p/{{ $.Slug }}/games/{{ $row.OptionID }}/delete"
+              data-game="{{ $row.Name }}"{{ if $row.HasVotes }} data-confirm="1"{{ end }}>
+          <button type="submit" class="g-drop" aria-label="{{ $.L.T "game.removeLabel" }} {{ $row.Name }}">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2.5 2.5 9.5 9.5M9.5 2.5 2.5 9.5"/></svg>
+          </button>
+        </form>
+      </div>
+      <button type="button" class="cell live{{ if $row.IsBest }} is-best{{ end }}" data-opt="{{ $row.OptionID }}"
+              data-v="{{ $row.Mine }}" data-board="game" data-prefix="{{ $row.Name }}"
+              aria-label="{{ $row.Name }}: {{ $.L.T (printf "gcell.%s" $row.Mine) }}. {{ $.L.T "cell.hint" }}">{{ glyph $row.Mine }}</button>
+      {{ range $row.Cells }}<div class="cell{{ if $row.IsBest }} is-best{{ end }}" data-v="{{ .Value }}" title="{{ .Title }}">{{ glyph .Value }}</div>{{ end }}
+      <div class="end{{ if $row.IsBest }} is-best{{ end }}"></div>
+    {{ end }}
+  </div></div>
+  {{ end }}
+
+  <noscript><div class="noscript">{{ .L.T "board.noscript" }}</div></noscript>
+</section>
+
+{{/* ---- spodní lišta: jedna přezdívka, jedno uložení pro obě desky ---- */}}
+<form class="actionbar" id="vote-form" method="post" action="/p/{{ .Slug }}/votes"
+      data-lyes="{{ .L.T "cell.yes" }}" data-lmaybe="{{ .L.T "cell.maybe" }}" data-lno="{{ .L.T "cell.no" }}"
+      data-gyes="{{ .L.T "gcell.yes" }}" data-gmaybe="{{ .L.T "gcell.maybe" }}" data-gno="{{ .L.T "gcell.no" }}"
+      data-hint="{{ .L.T "cell.hint" }}">
+  <div class="actionbar-in">
+    {{ range .View.Dates }}<input type="hidden" name="choice_{{ .OptionID }}" value="{{ .Mine }}" id="in-{{ .OptionID }}">{{ end }}
+    {{ range .View.Games }}<input type="hidden" name="choice_{{ .OptionID }}" value="{{ .Mine }}" id="in-{{ .OptionID }}">{{ end }}
+    <p class="ab-text">
+      {{ if .Editing }}<strong>{{ .Mine.Name }}</strong>: {{ .L.T "strip.editing" }}
+      {{ else }}{{ .L.T "strip.newHint" }}{{ end }}
+      <span id="marked" class="marked" data-tpl="{{ .L.T "strip.marked" }}"></span>
+    </p>
+    {{ if not .Editing }}
+    <input class="field" type="text" name="name" id="nick" value="{{ .Mine.Name }}"
+           placeholder="{{ .L.T "strip.nickname" }}" aria-label="{{ .L.T "strip.nickname" }}"
+           maxlength="18" autocomplete="off" required>
+    {{ end }}
+    <button type="submit" class="btn btn-primary">
+      {{ if .Editing }}{{ .L.T "strip.save" }}{{ else }}{{ .L.T "strip.join" }}{{ end }}
+    </button>
+  </div>
+</form>
+
+{{/* Potvrzení mazání hry, na kterou už někdo hlasoval. Bez JS se formulář
+     odešle rovnou, s JS se nejdřív zeptáme. */}}
+<dialog class="confirm" id="confirm-delete" data-body="{{ .L.T "confirm.body" }}">
+  <h2 class="confirm-title">{{ .L.T "confirm.title" }}</h2>
+  <p class="confirm-body" id="confirm-body"></p>
+  <div class="confirm-actions">
+    <button type="button" class="btn" data-confirm-cancel>{{ .L.T "confirm.cancel" }}</button>
+    <button type="button" class="btn btn-danger" data-confirm-ok>{{ .L.T "confirm.delete" }}</button>
+  </div>
+</dialog>
+{{ end }}
+
+{{ define "key" }}
+<div class="key">
+  <span class="key-item"><span class="swatch yes"></span>{{ .L.T "board.yes" }}</span>
+  <span class="key-item"><span class="swatch maybe"></span>{{ .L.T "board.maybe" }}</span>
+  <span class="key-item"><span class="swatch no"></span>{{ .L.T "board.no" }}</span>
+</div>
+{{ end }}
+
+{{ define "cover" }}
+<span class="cover cover-{{ .Size }}" style="--h: {{ .Hue }}" aria-hidden="true">
+  {{ if .Cover }}<img class="cover-img" src="https://images.igdb.com/igdb/image/upload/t_cover_small/{{ .Cover }}.jpg" alt="" loading="lazy" onerror="this.remove()">{{ end }}
+  <span class="cover-mono">{{ .Initials }}</span>
+</span>
+{{ end }}

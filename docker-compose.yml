@@ -9,9 +9,13 @@ services:
     environment:
       PORT: "8080"
       DB_PATH: /data/kdyhrajeme.db
-      # Podle TZ se určuje "dnešek" předvyplněný v novém hlasování.
+      # Podle TZ se určuje "dnešek" předvyplněný v novém sezení.
       # Bez něj je v kontejneru UTC a kolem půlnoci by to bylo o den vedle.
       TZ: Europe/Prague
+      # Vyhledávání her přes IGDB (přes Twitch). Bez těchhle dvou jede
+      # aplikace dál jen s termíny. Jak je získat viz README.
+      # IGDB_CLIENT_ID: ""
+      # IGDB_CLIENT_SECRET: ""
     volumes:
       - kdyhrajeme-data:/data
     healthcheck:
