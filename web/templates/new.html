@@ -21,11 +21,7 @@
 
   <div>
     <span class="lbl">{{ .L.T "create.dates" }}</span>
-    <div class="stack" id="opts"
-         data-label-date="{{ .L.T "create.fieldDate" }}"
-         data-label-start="{{ .L.T "create.fieldStart" }}"
-         data-label-end="{{ .L.T "create.fieldEnd" }}"
-         data-label-remove="{{ .L.T "create.removeDate" }}">
+    <div class="stack" id="opts" data-default-day="{{ .DefaultDay }}">
       {{ range .Form.Dates }}
       <div class="opt-row">
         <input class="field f-date" type="date" name="day" value="{{ .Day }}" aria-label="{{ $.L.T "create.fieldDate" }}">

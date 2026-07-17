@@ -61,10 +61,17 @@ instead of the SQLite text.
 
 ### Environment
 
-| Variable  | Default                | Notes                                    |
-|-----------|------------------------|------------------------------------------|
-| `PORT`    | `8080`                 | Listen port.                             |
-| `DB_PATH` | `/data/kdyhrajeme.db`  | SQLite file. Put it on the volume.       |
+| Variable  | Default                | Notes                                       |
+|-----------|------------------------|---------------------------------------------|
+| `PORT`    | `8080`                 | Listen port.                                |
+| `DB_PATH` | `/data/kdyhrajeme.db`  | SQLite file. Put it on the volume.          |
+| `TZ`      | `UTC`                  | Decides which day counts as "today". Set it. |
+
+Set `TZ` (for example `Europe/Prague`). It only affects the date prefilled
+into a new poll, and only near midnight, but on a UTC container that prefill
+is a day behind for anyone east of Greenwich. The browser corrects the first
+date to its own today while the field is untouched, so this mostly matters
+with JavaScript off.
 
 There is no secret to configure. The key used to sign vote cookies is
 generated on first run and kept in the database, so restarts don't sign
@@ -131,3 +138,7 @@ go test ./...
 Covers the Czech plural boundaries, catalog parity between languages, scoring,
 and the case where someone editing their vote must not appear in the grid
 twice while still counting toward the score.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

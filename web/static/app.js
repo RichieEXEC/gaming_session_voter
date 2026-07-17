@@ -104,14 +104,55 @@
   var opts = document.getElementById("opts");
   var addBtn = document.getElementById("add-date");
 
+  // Datum je "YYYY-MM-DD". Počítá se v UTC, aby posun časové zóny
+  // nepřehodil den; přetáčení měsíce, roku i přestupného února řeší Date.
+  function addDays(iso, n) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+    if (!m) return "";
+    var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    if (isNaN(d.getTime())) return "";
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function todayISO() {
+    var d = new Date();
+    var mm = String(d.getMonth() + 1);
+    var dd = String(d.getDate());
+    return d.getFullYear() + "-" + (mm.length < 2 ? "0" + mm : mm) + "-" + (dd.length < 2 ? "0" + dd : dd);
+  }
+
   if (opts && addBtn) {
+    // Server zná dnešek jen podle svého TZ. Dokud do pole nikdo nesáhl,
+    // srovnáme ho na dnešek podle prohlížeče.
+    var defaultDay = opts.getAttribute("data-default-day");
+    if (defaultDay) {
+      var firstDay = opts.querySelector('input[name="day"]');
+      if (firstDay && firstDay.value === defaultDay) {
+        var t = todayISO();
+        if (t !== defaultDay) firstDay.value = t;
+      }
+    }
+
+    // Nový termín = den po posledním zadaném. Když je poslední řádek
+    // prázdný, bereme poslední vyplněný nad ním; když není žádný, dnešek.
+    function nextDay() {
+      var days = opts.querySelectorAll('input[name="day"]');
+      for (var i = days.length - 1; i >= 0; i--) {
+        var next = addDays(days[i].value, 1);
+        if (next) return next;
+      }
+      return todayISO();
+    }
+
     addBtn.addEventListener("click", function () {
       var rows = opts.querySelectorAll(".opt-row");
       var last = rows[rows.length - 1];
       var row = last.cloneNode(true);
+      var day = nextDay();
 
       row.querySelectorAll("input").forEach(function (f) {
-        if (f.name === "day") f.value = "";
+        if (f.name === "day") f.value = day;
         // Čas se nechá podle posledního řádku, obvykle sedí.
       });
       opts.appendChild(row);

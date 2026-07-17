@@ -24,6 +24,9 @@ const (
 	maxNoteLen   = 500
 	maxNickLen   = 18
 	maxBodyBytes = 64 << 10
+
+	// dayLayout je tvar data, jak ho posílá <input type="date">.
+	dayLayout = "2006-01-02"
 )
 
 type Server struct {
@@ -123,6 +126,12 @@ type pageData struct {
 	Form    createForm
 	Status  int
 	Lead    string
+
+	// DefaultDay je dnešek, jak ho vidí server. Prohlížeč podle něj
+	// pozná, že do pole s datem nikdo nesáhl, a smí ho přepsat na svoje
+	// dnes. Prázdné, když se formulář překresluje po chybě: tam už je
+	// uvnitř to, co člověk zadal.
+	DefaultDay string
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, page string, code int, data pageData) {

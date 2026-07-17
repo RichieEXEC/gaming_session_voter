@@ -9,6 +9,9 @@ services:
     environment:
       PORT: "8080"
       DB_PATH: /data/kdyhrajeme.db
+      # Podle TZ se určuje "dnešek" předvyplněný v novém hlasování.
+      # Bez něj je v kontejneru UTC a kolem půlnoci by to bylo o den vedle.
+      TZ: Europe/Prague
     volumes:
       - kdyhrajeme-data:/data
     healthcheck:

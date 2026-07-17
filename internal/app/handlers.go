@@ -28,10 +28,17 @@ type formDate struct {
 
 func (s *Server) handleNew(w http.ResponseWriter, r *http.Request) {
 	pr := i18n.NewPrinter(i18n.FromRequest(r))
+
+	// Dnešek podle času serveru, tzn. podle proměnné TZ. V kontejneru je
+	// bez ní UTC, takže by se kolem půlnoci trefil o den vedle. Prohlížeč
+	// si to pak srovná na svoje dnes, dokud do pole nikdo nesáhl.
+	today := time.Now().Format(dayLayout)
+
 	s.render(w, r, "new", http.StatusOK, pageData{
-		L:     pr,
-		Title: pr.T("create.heading"),
-		Form:  createForm{Dates: []formDate{{Start: "19:00", End: "22:00"}}},
+		L:          pr,
+		Title:      pr.T("create.heading"),
+		DefaultDay: today,
+		Form:       createForm{Dates: []formDate{{Day: today, Start: "19:00", End: "22:00"}}},
 	})
 }
 
@@ -91,7 +98,7 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 		if fd.Day == "" {
 			continue // prázdné řádky se prostě zahodí
 		}
-		if _, err := time.Parse("2006-01-02", fd.Day); err != nil {
+		if _, err := time.Parse(dayLayout, fd.Day); err != nil {
 			reshow(pr.T("err.dateInvalid"))
 			return
 		}
