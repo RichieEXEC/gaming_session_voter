@@ -1,6 +1,7 @@
 package app
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +36,15 @@ type LeadGame struct {
 	Yes               int
 }
 
+// DayGame je hra, která zatím nejlíp sedí konkrétnímu termínu: rozhodují
+// jen hlasy lidí, kteří ten den můžou přijít (možná = poloviční váha).
+type DayGame struct {
+	Name, Cover string
+	Hue         int
+	Initials    string
+	Yes         int // kolik lidí s jistým ano pro termín chce určitě tuhle hru
+}
+
 // Cell je hlas jednoho člověka pro jednu možnost.
 type Cell struct {
 	Value string // yes|maybe|no
@@ -49,6 +59,7 @@ type DateRow struct {
 	Cells                  []Cell
 	Yes, Total, Percent    int
 	IsBest                 bool
+	TopGame                *DayGame // co by se hrálo tenhle den; nil bez hlasů
 }
 
 type GameRow struct {
@@ -69,8 +80,8 @@ type GameRow struct {
 }
 
 // buildSessionView spočítá obě desky. Skóre: ano = 1, možná = 0.5, ne = 0.
-// Vede možnost s nejvyšším skóre; při shodě ta dřívější (termíny jsou
-// chronologicky, hry v pořadí přidání).
+// Vede možnost s nejvyšším skóre; při shodě ta dřívější. Termíny zůstávají
+// chronologicky, hry se řadí podle skóre (při shodě podle pořadí přidání).
 func buildSessionView(sess *store.Session, pr i18n.Printer, mine *store.Vote) SessionView {
 	v := SessionView{Voters: len(sess.Votes)}
 
@@ -99,6 +110,7 @@ func buildSessionView(sess *store.Session, pr i18n.Printer, mine *store.Vote) Se
 			Yes:      yes,
 			Total:    v.Voters,
 			Percent:  pct(score, v.Voters),
+			TopGame:  topGameForDay(sess.Votes, sess.Games, d.ID),
 		}
 		if t, err := time.Parse(dayLayout, d.Day); err == nil {
 			row.Dow, row.Day, row.Month = pr.Dow(t), t.Format("02"), pr.Month(t)
@@ -121,8 +133,12 @@ func buildSessionView(sess *store.Session, pr i18n.Printer, mine *store.Vote) Se
 	if v.Lead != nil {
 		leadYes = v.Lead.Yes
 	}
-	bestGameScore, bestGameIdx := 0.0, -1
-	for i, g := range sess.Games {
+	type scoredRow struct {
+		row   GameRow
+		score float64
+	}
+	rows := make([]scoredRow, 0, len(sess.Games))
+	for _, g := range sess.Games {
 		score, yes := scoreOf(sess.Votes, g.ID)
 		row := GameRow{
 			OptionID:   g.ID,
@@ -149,14 +165,17 @@ func buildSessionView(sess *store.Session, pr i18n.Printer, mine *store.Vote) Se
 			row.Short = leadYes - g.MaxPlayers
 			row.TightTitle = pr.T("game.tightTitle", g.MaxPlayers, leadYes)
 		}
-		if score > bestGameScore {
-			bestGameScore, bestGameIdx = score, i
-		}
-		v.Games = append(v.Games, row)
+		rows = append(rows, scoredRow{row: row, score: score})
 	}
-	if bestGameIdx >= 0 {
-		v.Games[bestGameIdx].IsBest = true
-		r := v.Games[bestGameIdx]
+	// Hry podle hlasů, ne podle pořadí přidání. Stabilně: při shodě skóre
+	// zůstává pořadí přidání, takže se řádky nepřehazují naprázdno.
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].score > rows[j].score })
+	for _, r := range rows {
+		v.Games = append(v.Games, r.row)
+	}
+	if len(rows) > 0 && rows[0].score > 0 {
+		v.Games[0].IsBest = true
+		r := v.Games[0]
 		v.Best = &LeadGame{
 			Name: r.Name, Meta: r.Meta, Cover: r.Cover,
 			Hue: r.Hue, Initials: r.Initials, Yes: r.Yes,
@@ -164,6 +183,50 @@ func buildSessionView(sess *store.Session, pr i18n.Printer, mine *store.Vote) Se
 	}
 
 	return v
+}
+
+// topGameForDay najde hru, která nejlíp sedí lidem, kteří v daný termín
+// můžou. Váha hlasu pro termín (ano 1, možná 0.5, jinak 0) se násobí váhou
+// hlasu pro hru, takže rozhodují hlavně jistí příchozí. Při shodě vyhrává
+// dřívější hra, stejně jako u ostatních žebříčků. Bez relevantních hlasů
+// vrací nil.
+func topGameForDay(votes []store.Vote, games []store.GameOption, dayID int64) *DayGame {
+	bestIdx, bestScore, bestYes := -1, 0.0, 0
+	for i, g := range games {
+		score, yes := 0.0, 0
+		for _, vote := range votes {
+			dw := choiceWeight(vote.Choices[dayID])
+			if dw == 0 {
+				continue
+			}
+			score += dw * choiceWeight(vote.Choices[g.ID])
+			if vote.Choices[dayID] == "yes" && vote.Choices[g.ID] == "yes" {
+				yes++
+			}
+		}
+		if score > bestScore {
+			bestIdx, bestScore, bestYes = i, score, yes
+		}
+	}
+	if bestIdx < 0 {
+		return nil
+	}
+	g := games[bestIdx]
+	return &DayGame{
+		Name: g.Name, Cover: g.Cover,
+		Hue: gameHue(g.Name), Initials: gameInitials(g.Name),
+		Yes: bestYes,
+	}
+}
+
+func choiceWeight(v string) float64 {
+	switch v {
+	case "yes":
+		return 1
+	case "maybe":
+		return 0.5
+	}
+	return 0
 }
 
 // gameHue a gameInitials vyrábějí náhradní obal z názvu hry: barva podle

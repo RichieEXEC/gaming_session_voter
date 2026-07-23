@@ -125,6 +125,7 @@ button { font: inherit; cursor: pointer; }
 .cover-lg { width: 46px; height: 61px; } .cover-lg .cover-mono { font-size: 15px; }
 .cover-md { width: 40px; height: 53px; } .cover-md .cover-mono { font-size: 12px; }
 .cover-sm { width: 32px; height: 43px; } .cover-sm .cover-mono { font-size: 10px; }
+.cover-xs { width: 16px; height: 21px; border-radius: 3px; } .cover-xs .cover-mono { font-size: 8px; }
 
 /* ---------- deska ---------- */
 
@@ -211,6 +212,9 @@ button { font: inherit; cursor: pointer; }
 .g-meta { font-family: var(--mono); font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .d-date { font-family: var(--mono); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 7px; }
 .d-dow { color: var(--amber-text); font-size: 11px; letter-spacing: .1em; }
+.d-game { display: flex; align-items: center; gap: 6px; margin-top: 3px; min-width: 0; }
+.d-game-name { font-family: var(--mono); font-size: 10.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d-game-count { font-family: var(--mono); font-size: 9.5px; color: var(--faint); font-variant-numeric: tabular-nums; flex: none; }
 .r-foot { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
 .bar { flex: 1; height: 4px; border-radius: 2px; background: var(--raised-2); overflow: hidden; }
 .bar i { display: block; height: 100%; background: var(--amber); border-radius: 2px; transition: width .25s ease; }

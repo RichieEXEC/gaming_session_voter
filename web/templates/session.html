@@ -72,6 +72,13 @@
       <div class="rail{{ if $row.IsBest }} is-best{{ end }}"><div class="g-body">
         <div class="d-date"><span class="d-dow">{{ $row.Dow }}</span>{{ $row.Day }} {{ $row.Month }}</div>
         {{ if $row.Times }}<div class="g-meta">{{ $row.Times }}</div>{{ end }}
+        {{ with $row.TopGame }}
+        <div class="d-game" title="{{ $.L.T "day.gameTitle" .Name }}">
+          {{ template "cover" dict "Cover" .Cover "Hue" .Hue "Initials" .Initials "Size" "xs" }}
+          <span class="d-game-name">{{ .Name }}</span>
+          {{ if .Yes }}<span class="d-game-count">{{ .Yes }}&times;</span>{{ end }}
+        </div>
+        {{ end }}
         <div class="r-foot"><span class="bar"><i style="width: {{ $row.Percent }}%"></i></span>
           <span class="r-tally">{{ $row.Yes }}/{{ $row.Total }}</span></div>
         {{ if $row.IsBest }}<div class="chips"><span class="chip-best">{{ $.L.T "board.best" }}</span></div>{{ end }}

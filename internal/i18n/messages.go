@@ -60,6 +60,8 @@ var catalogs = map[Lang]map[string]string{
 		"derived.none": "Termín zatím nikdo nehlasoval, takže počet hráčů zatím nehlídáme.",
 		"derived.tag":  "zatím",
 
+		"day.gameTitle": "Kdyby se hrálo v tenhle termín, podle hlasů lidí, kteří ten den můžou, zatím vede %s.",
+
 		"cell.yes":   "může",
 		"cell.maybe": "možná",
 		"cell.no":    "nemůže",
@@ -202,6 +204,8 @@ var catalogs = map[Lang]map[string]string{
 		"derived.lead": "%s is leading so far, with %s available. Player counts are checked against it.",
 		"derived.none": "No date has votes yet, so player counts aren't checked yet.",
 		"derived.tag":  "for now",
+
+		"day.gameTitle": "If this date wins, %s is the leading game so far, going by the people who can make it.",
 
 		"cell.yes":   "available",
 		"cell.maybe": "maybe",

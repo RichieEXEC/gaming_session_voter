@@ -62,6 +62,67 @@ func TestGameLead(t *testing.T) {
 	}
 }
 
+// Každý termín hlásí hru, která sedí právě těm, kdo ten den můžou přijít.
+func TestDayTopGame(t *testing.T) {
+	v := buildSessionView(testSession(), cs(), nil)
+	// 23. 7. můžou oba: Helldivers 1 + 0.5 = 1.5 > Among Us 1.
+	if tg := v.Dates[0].TopGame; tg == nil || tg.Name != "Helldivers 2" || tg.Yes != 1 {
+		t.Fatalf("TopGame[0] = %+v, chci Helldivers 2 s Yes 1", v.Dates[0].TopGame)
+	}
+	// 28. 7. může jen Terka a ta chce Among Us: den má jiného vítěze než celek.
+	if tg := v.Dates[1].TopGame; tg == nil || tg.Name != "Among Us" || tg.Yes != 1 {
+		t.Fatalf("TopGame[1] = %+v, chci Among Us s Yes 1", v.Dates[1].TopGame)
+	}
+}
+
+// Starší hlasy nemusí mít klíče her vůbec (hry se přidaly později) a chybět
+// můžou i hry nebo hlasy samotné. Nic z toho nesmí den rozbít.
+func TestDayTopGameMissingChoices(t *testing.T) {
+	sess := &store.Session{
+		ID: 1, Slug: "x", Title: "T",
+		Dates: []store.DateOption{{ID: 10, Day: "2026-07-23"}},
+		Games: []store.GameOption{{ID: 20, Name: "Hra"}},
+		Votes: []store.Vote{
+			{ID: 1, Name: "A", Choices: map[int64]string{10: "yes"}},
+		},
+	}
+	v := buildSessionView(sess, cs(), nil)
+	if v.Dates[0].TopGame != nil {
+		t.Errorf("bez hlasů pro hry nemá den co hlásit, mám %+v", v.Dates[0].TopGame)
+	}
+
+	sess.Games = nil
+	v = buildSessionView(sess, cs(), nil)
+	if v.Dates[0].TopGame != nil {
+		t.Errorf("bez her nemá den co hlásit, mám %+v", v.Dates[0].TopGame)
+	}
+}
+
+// Hry se řadí podle hlasů; pořadí přidání rozhoduje jen při shodě.
+func TestGamesSortedByVotes(t *testing.T) {
+	sess := &store.Session{
+		ID: 1, Slug: "x", Title: "T",
+		Dates: []store.DateOption{{ID: 10, Day: "2026-07-23"}},
+		Games: []store.GameOption{
+			{ID: 20, Name: "Stará bez hlasů"},
+			{ID: 21, Name: "Nová oblíbená"},
+		},
+		Votes: []store.Vote{
+			{ID: 1, Name: "A", Choices: map[int64]string{10: "yes", 21: "yes"}},
+		},
+	}
+	v := buildSessionView(sess, cs(), nil)
+	if v.Games[0].Name != "Nová oblíbená" || v.Games[1].Name != "Stará bez hlasů" {
+		t.Fatalf("pořadí her je [%q, %q], vést má Nová oblíbená", v.Games[0].Name, v.Games[1].Name)
+	}
+	if !v.Games[0].IsBest || v.Games[1].IsBest {
+		t.Errorf("NEJLEPŠÍ patří první hře po seřazení")
+	}
+	if v.Best == nil || v.Best.Name != "Nová oblíbená" {
+		t.Fatalf("Best = %+v, chci Nová oblíbená", v.Best)
+	}
+}
+
 // Jádro propojení desek: počet hráčů se hlídá proti průběžně vedoucímu termínu.
 func TestPlayerCountAgainstLeadingDate(t *testing.T) {
 	sess := &store.Session{
